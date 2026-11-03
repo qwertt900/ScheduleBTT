@@ -1,4 +1,4 @@
-const API_KEY = 'AIzaSyBmurjffl_g4izAc8QzaLqeGL3n9sAmD_A'; 
+const API_KEY = 'AIzaSyB20VY7WRY-Bkq66mH5wau-tWOWEgYtv1E'; 
 const SPREADSHEET_ID = '1LsjCmsElzfQr2kJWn5JBeKVTh66bR7zxIOGZgqoFCAY';
 
 const RANGE_GROUPS = "'Расписание'!E7:E";
