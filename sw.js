@@ -1,4 +1,4 @@
-const CACHE_NAME = 'btt-schedule-v12';    
+const CACHE_NAME = 'btt-schedule-v14';    
 const ASSETS = [
   './',
   './index.html',

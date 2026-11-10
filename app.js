@@ -609,18 +609,27 @@ async function requestNotificationPermission() {
 }
 
 // Показ уведомления (безопасно, даже если разрешение не выдано)
-function showAppNotification(title, body) {
+// На мобильных (Android/iOS) системные уведомления можно показывать ТОЛЬКО через service worker,
+// поэтому дожидаемся navigator.serviceWorker.ready и вызываем reg.showNotification напрямую.
+async function showAppNotification(title, body) {
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
     try {
-        // В PWA на Android/iOS предпочтительнее SW-уведомление
-        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-            navigator.serviceWorker.controller.postMessage({
-                type: 'SHOW_NOTIFICATION', title, body
-            });
-        } else {
-            new Notification(title, { body, icon: 'logo.png' });
+        if ('serviceWorker' in navigator) {
+            const reg = await navigator.serviceWorker.ready;
+            if (reg && reg.showNotification) {
+                await reg.showNotification(title, {
+                    body,
+                    icon: './logo.png',
+                    badge: './logo.png',
+                    vibrate: [200, 100, 200],
+                    tag: 'btt-schedule' // не плодим дубликаты
+                });
+                return;
+            }
         }
-    } catch (e) { /* игнорируем */ }
+        // Запасной путь для десктопных браузеров без активного SW
+        new Notification(title, { body, icon: 'logo.png' });
+    } catch (e) { console.warn('Не удалось показать уведомление:', e); }
 }
 
 // Снимок расписания выбранной группы/преподавателя — короткая строка для сравнения
