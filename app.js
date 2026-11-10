@@ -1,4 +1,4 @@
-const API_KEY = 'AIzaSyB20VY7WRY-Bkq66mH5wau-tWOWEgYtv1E'; 
+const API_KEY = 'AIzaSyB20VY7WRY-Bkq66mH5wau-tWOWEgYtv1E';   
 const SPREADSHEET_ID = '1LsjCmsElzfQr2kJWn5JBeKVTh66bR7zxIOGZgqoFCAY';
 
 const RANGE_GROUPS = "'Расписание'!E7:E";
@@ -6,6 +6,16 @@ const RANGE_TEACHER_LAST = "'Расписание'!I7:I";
 const RANGE_TEACHER_FIRST = "'Расписание'!J7:J";
 const RANGE_TEACHER_MIDDLE = "'Расписание'!K7:K";
 const RANGE_SCHEDULE = "'Расписание'!A8:K"; 
+
+// Нормализация строки из таблицы: убираем обычные и неразрывные пробелы по краям,
+// заменяем разные виды тире/дефисов на обычный дефис, схлопываем двойные пробелы
+function normalizeCell(str) {
+    return String(str === undefined || str === null ? '' : str)
+        .replace(/[\u00A0\u2007\u202F]/g, ' ')
+        .replace(/[\u2010\u2011\u2012\u2013\u2014\u2212]/g, '-')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
 
 // Экранирование HTML, чтобы данные из таблицы не ломали разметку
 function escapeHtml(str) {
@@ -158,6 +168,10 @@ function updateSettingsUI() {
     // Переключатель темы
     const toggle = document.getElementById('theme-toggle');
     if (toggle) toggle.checked = getTheme() === 'dark';
+
+    // Переключатель уведомлений
+    const notifToggle = document.getElementById('notif-toggle');
+    if (notifToggle) notifToggle.checked = getNotificationsEnabled();
 
     // Список избранного в настройках
     const list = document.getElementById('favorites-list');
@@ -316,7 +330,7 @@ async function loadTeachers() {
 
 function openSchedule(type, name, keepDate = false) {
     currentType = type;
-    currentName = name;
+    currentName = normalizeCell(name);
     document.getElementById('schedule-type').innerText = type === 'group' ? 'Группа' : 'Преподаватель';
     document.getElementById('schedule-name').innerText = name;
     // Сбрасываем на сегодня только при новом выборе, а не при обновлении/возврате
@@ -441,7 +455,9 @@ async function loadSchedule() {
     if (!cachedData) {
         try { 
             cachedData = await fetchSheet(RANGE_SCHEDULE); 
-        } 
+            // Обновляем «отпечаток» расписания для уведомлений
+            if (getNotificationsEnabled()) lastScheduleSnapshot = computeScheduleSnapshot();
+        }  
         catch (e) { 
             document.getElementById('schedule-list').innerHTML = '<p style="text-align:center; color:#888; margin-top:20px; font-size:14px;">Нет подключения к интернету.<br>Подключитесь к сети для первой загрузки.</p>';
             showLoader(false); 
@@ -451,16 +467,19 @@ async function loadSchedule() {
 
     let html = '';
     for (let row of cachedData) {
-        if (row.length < 11) continue;
-        
+        if (!row || row.length < 5) continue;
+
         let day = parseInt(row[0]), month = parseInt(row[1]), year = parseInt(row[2]);
+        if (isNaN(day) || isNaN(month) || isNaN(year)) continue;
         if (day !== targetDay || month !== targetMonth || year !== targetYear) continue;
 
-        let pairNum = row[3] || '';
-        let group = row[4] || '';
-        let subject = row[6] || '';
-        let room = row[7] || '';
-        let teacher = `${row[8] || ''} ${row[9] || ''} ${row[10] || ''}`.replace(/\s+/g, ' ').trim();
+        // Строки с незаполненными правыми колонками приходят ОБРЕЗАННЫМИ от API,
+        // поэтому нельзя требовать row.length >= 11 — достаём ячейки с запасом
+        let pairNum = normalizeCell(row[3]);
+        let group = normalizeCell(row[4]);
+        let subject = normalizeCell(row[6]);
+        let room = normalizeCell(row[7]);
+        let teacher = normalizeCell(`${(row[8] || '')} ${(row[9] || '')} ${(row[10] || '')}`);
 
         if (currentType === 'group' && group.toLowerCase() !== currentName.toLowerCase()) continue;
         if (currentType === 'teacher' && teacher.toLowerCase() !== currentName.toLowerCase()) continue;
@@ -488,6 +507,8 @@ async function loadSchedule() {
 
     if (html === '') html = '<p style="text-align:center; color:#888; margin-top:20px; font-size:14px;">На этот день пар нет</p>';
     document.getElementById('schedule-list').innerHTML = html;
+    // Обновляем снапшот и слежение после каждого обновления кэша расписания
+    if (getNotificationsEnabled()) scheduleSnapshotAndWatch();
     showLoader(false);
 }
 
@@ -498,8 +519,8 @@ function showLoader(show) {
 // ==========================================
 // ЛОГИКА ОБНОВЛЕНИЯ ДАННЫХ (Без перезагрузки страницы)
 // ==========================================
-// При обновлении из main-screen — данные чистятся, но выбор группы/преподавателя сохраняем,
-// чтобы кнопка “Расписание” в нижнем меню не вела обратно к спискам
+// ОБНОВЛЕНИЕ ДАННЫХ (pull-to-refresh)
+// ==========================================
 window.updateData = async () => {
     cachedData = null;
     allGroups = [];
@@ -517,6 +538,161 @@ window.updateData = async () => {
     else if (document.getElementById('screen-teachers').classList.contains('active')) await loadTeachers();
     else if (document.getElementById('screen-schedule').classList.contains('active')) await loadSchedule();
 };
+
+// ---- PULL-TO-REFRESH (обновление свайпом сверху вниз) ----
+(function initPullToRefresh() {
+    let startY = 0;
+    let pulling = false;
+    let isRefreshing = false;
+    const THRESHOLD = 70; // высота потянуть для срабатывания
+
+    document.addEventListener('touchstart', (e) => {
+        if (isRefreshing) return;
+        // Свайп работает только когда контент прокручен в самый верх
+        const scroller = document.querySelector('.screen.active .content');
+        if (scroller && scroller.scrollTop <= 0) {
+            startY = e.touches[0].clientY;
+            pulling = true;
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (e) => {
+        if (!pulling || isRefreshing) return;
+        const delta = e.touches[0].clientY - startY;
+        if (delta > THRESHOLD) {
+            pulling = false;
+            isRefreshing = true;
+            showLoader(true);
+            window.updateData().finally(() => {
+                showLoader(false);
+                // небольшая задержка, чтобы индикатор не мигал при повторном свайпе
+                setTimeout(() => { isRefreshing = false; }, 400);
+            });
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchend', () => { pulling = false; }, { passive: true });
+})();
+
+// ---- УВЕДОМЛЕНИЯ ОБ ИЗМЕНЕНИЯХ РАСПИСАНИЯ ----
+const NOTIF_CHECK_INTERVAL = 15 * 60 * 1000; // проверка раз в 15 минут
+let lastScheduleSnapshot = null; // «отпечаток» расписания для сравнения
+
+function getNotificationsEnabled() {
+    try { return localStorage.getItem('btt_notifications') === 'on'; }
+    catch (e) { return false; }
+}
+
+function setNotificationsEnabled(enabled) {
+    try { localStorage.setItem('btt_notifications', enabled ? 'on' : 'off'); } catch (e) {}
+    updateSettingsUI();
+    if (enabled) {
+        requestNotificationPermission().then(granted => {
+            if (granted) {
+                scheduleSnapshotAndWatch();
+                showAppNotification('Уведомления включены', 'Вы будете получать оповещения об изменениях в расписании.');
+            } else {
+                setNotificationsEnabled(false);
+            }
+        });
+    } else {
+        stopScheduleWatcher();
+    }
+}
+
+async function requestNotificationPermission() {
+    if (!('Notification' in window)) return false;
+    if (Notification.permission === 'granted') return true;
+    if (Notification.permission === 'denied') return false;
+    const result = await Notification.requestPermission();
+    return result === 'granted';
+}
+
+// Показ уведомления (безопасно, даже если разрешение не выдано)
+function showAppNotification(title, body) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    try {
+        // В PWA на Android/iOS предпочтительнее SW-уведомление
+        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({
+                type: 'SHOW_NOTIFICATION', title, body
+            });
+        } else {
+            new Notification(title, { body, icon: 'logo.png' });
+        }
+    } catch (e) { /* игнорируем */ }
+}
+
+// Снимок расписания выбранной группы/преподавателя — короткая строка для сравнения
+function computeScheduleSnapshot() {
+    if (!cachedData || !currentType || !currentName) return null;
+    const rows = cachedData
+        .filter(row => {
+            if (!row || row.length < 5) return false;
+            const group = normalizeCell(row[4]);
+            const teacher = normalizeCell(`${row[8] || ''} ${row[9] || ''} ${row[10] || ''}`);
+            if (currentType === 'group') return group.toLowerCase() === currentName.toLowerCase();
+            return teacher.toLowerCase() === currentName.toLowerCase();
+        })
+        .map(row => row.slice(0, 11).join('|'))
+        .sort()
+        .join('\n');
+    return rows;
+}
+
+let watchTimer = null;
+function scheduleSnapshotAndWatch() {
+    if (!getNotificationsEnabled()) return;
+    // Снимок после текущей загрузки данных
+    if (cachedData) lastScheduleSnapshot = computeScheduleSnapshot();
+    startScheduleWatcher();
+}
+
+function startScheduleWatcher() {
+    if (watchTimer) return;
+    watchTimer = setInterval(checkScheduleChanges, NOTIF_CHECK_INTERVAL);
+}
+
+function stopScheduleWatcher() {
+    if (watchTimer) { clearInterval(watchTimer); watchTimer = null; }
+}
+
+async function checkScheduleChanges() {
+    if (!getNotificationsEnabled() || !currentType || !currentName) return;
+    try {
+        // Тихая подгрузка данных напрямую (минуя основной кэш)
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(RANGE_SCHEDULE)}?key=${API_KEY}`;
+        const resp = await fetch(url);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const freshRows = (data.values || []).map(row =>
+            row.map(cell => (cell === undefined || cell === null) ? '' : cell)
+        );
+
+        // Считаем снимок на свежих данных
+        const saved = cachedData;
+        cachedData = freshRows;
+        const freshSnapshot = computeScheduleSnapshot();
+        cachedData = saved;
+
+        if (freshSnapshot === null) return;
+        
+        if (lastScheduleSnapshot !== null && freshSnapshot !== lastScheduleSnapshot) {
+            showAppNotification(
+                'Расписание изменилось',
+                `В расписании для «${currentName}» произошли изменения. Откройте приложение, чтобы посмотреть.`
+            );
+        }
+        lastScheduleSnapshot = freshSnapshot;
+    } catch (e) { /* нет сети — тихо пропускаем */ }
+}
+
+// Автостарт наблюдателя, если уведомления уже включены
+if (getNotificationsEnabled()) {
+    requestNotificationPermission().then(granted => {
+        if (granted) scheduleSnapshotAndWatch();
+    });
+}
 
 // ==========================================
 // ЛОГИКА PWA (Только установка и фоновое обновление)

@@ -53,11 +53,6 @@
             </div>
             
             <div class="last-update" id="last-update">Последнее обновление: --</div>
-            
-            <!-- Кнопка обновления данных на главном экране -->
-            <div style="text-align: center; margin-top: 15px;">
-                <button onclick="window.updateData()" style="background: #2E7D32; color: white; border: none; padding: 8px 16px; border-radius: 20px; font-size: 14px; cursor: pointer;">↻ Обновить данные</button>
-            </div>
         </div>
     </div>
 
@@ -107,8 +102,7 @@
                 <!-- Кнопка избранного -->
                 <button id="favorite-btn" class="favorite-btn" onclick="toggleFavoriteForCurrent()" style="margin-left:auto;font-size: 40px;">☆</button>
 
-                <!-- Кнопка обновления расписания -->
-                <button class="btn-back" onclick="window.updateData()" style="margin-left:6px; font-size: 40px; border-color: transparent;">↻</button>
+                <div style="width:44px;"></div>
             </div>
             
             <div class="week-nav">
@@ -162,6 +156,19 @@
             </div>
 
             <div class="settings-group">
+                <div class="settings-row">
+                    <div>
+                        <h4>🔔 Уведомления</h4>
+                        <p>Сообщать об изменениях в расписании</p>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="notif-toggle" onchange="setNotificationsEnabled(this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="settings-group">
                 <div class="settings-row" style="margin-bottom: 12px;">
                     <div>
                         <h4>⭐ Избранное</h4>
@@ -171,7 +178,7 @@
                 <ul id="favorites-list" class="list"></ul>
             </div>
 
-            <div class="last-update">Расписание БТТ · Версия 1.1.0</div>
+            <div class="last-update">Расписание БТТ · Версия 1.2.0</div>
 
         </div>
     </div>

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'btt-schedule-v10';  
+const CACHE_NAME = 'btt-schedule-v12';    
 const ASSETS = [
   './',
   './index.html',
@@ -34,6 +34,28 @@ self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
+  // Показ уведомления по команде со страницы
+  if (event.data && event.data.type === 'SHOW_NOTIFICATION') {
+    self.registration.showNotification(event.data.title, {
+      body: event.data.body,
+      icon: './logo.png',
+      badge: './logo.png',
+      vibrate: [200, 100, 200]
+    });
+  }
+});
+
+// Клик по уведомлению — фокусируем/открываем приложение
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      if (clientList.length > 0) {
+        return clientList[0].focus();
+      }
+      return clients.openWindow('./');
+    })
+  );
 });
 
 self.addEventListener('fetch', (e) => {
