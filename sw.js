@@ -1,4 +1,7 @@
-const CACHE_NAME = 'btt-schedule-v14';    
+// Подключаем воркер OneSignal для приема фоновых Push-уведомлений
+importScripts('https://onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
+
+const CACHE_NAME = 'btt-schedule-v17';
 const ASSETS = [
   './',
   './index.html',
@@ -9,7 +12,7 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (e) => {
-  self.skipWaiting(); // Принудительно устанавливаем новый SW
+  self.skipWaiting();
   e.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
   );
@@ -21,53 +24,27 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName); // Удаляем старый кэш
+            return caches.delete(cacheName);
           }
         })
       );
-    }).then(() => self.clients.claim()) // Берем контроль над страницей
+    }).then(() => self.clients.claim())
   );
 });
 
-// Слушаем команду от app.js на пропуск ожидания
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
-  // Показ уведомления по команде со страницы
-  if (event.data && event.data.type === 'SHOW_NOTIFICATION') {
-    self.registration.showNotification(event.data.title, {
-      body: event.data.body,
-      icon: './logo.png',
-      badge: './logo.png',
-      vibrate: [200, 100, 200]
-    });
-  }
-});
-
-// Клик по уведомлению — фокусируем/открываем приложение
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      if (clientList.length > 0) {
-        return clientList[0].focus();
-      }
-      return clients.openWindow('./');
-    })
-  );
 });
 
 self.addEventListener('fetch', (e) => {
-  // Только GET-запросы кэшируем
   if (e.request.method !== 'GET') return;
+  if (e.request.url.includes('onesignal.com')) return;
 
-  // Стратегия «сеть в приоритете, кэш как резерв»:
-  // свежие данные при интернете, кэш при отсутствии сети
   e.respondWith(
     fetch(e.request)
       .then((response) => {
-        // Кэшируем успешный ответ для офлайн-режима
         if (response && response.ok) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));

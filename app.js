@@ -1,5 +1,6 @@
 const API_KEY = 'AIzaSyB20VY7WRY-Bkq66mH5wau-tWOWEgYtv1E';   
 const SPREADSHEET_ID = '1LsjCmsElzfQr2kJWn5JBeKVTh66bR7zxIOGZgqoFCAY';
+const ONESIGNAL_APP_ID = '835a2543-5500-41c9-b1dc-59c9f2d37420';
 
 const RANGE_GROUPS = "'Расписание'!E7:E";
 const RANGE_TEACHER_LAST = "'Расписание'!I7:I";
@@ -7,8 +8,6 @@ const RANGE_TEACHER_FIRST = "'Расписание'!J7:J";
 const RANGE_TEACHER_MIDDLE = "'Расписание'!K7:K";
 const RANGE_SCHEDULE = "'Расписание'!A8:K"; 
 
-// Нормализация строки из таблицы: убираем обычные и неразрывные пробелы по краям,
-// заменяем разные виды тире/дефисов на обычный дефис, схлопываем двойные пробелы
 function normalizeCell(str) {
     return String(str === undefined || str === null ? '' : str)
         .replace(/[\u00A0\u2007\u202F]/g, ' ')
@@ -17,7 +16,6 @@ function normalizeCell(str) {
         .trim();
 }
 
-// Экранирование HTML, чтобы данные из таблицы не ломали разметку
 function escapeHtml(str) {
     return String(str === undefined || str === null ? '' : str)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -30,12 +28,10 @@ let currentName = '';
 let cachedData = null; 
 let allGroups = [];
 let allTeachers = [];
-let currentScreenId = 'screen-main';   // текущий активный экран
-let lastScreen = 'screen-main';        // экран для восстановления после перезагрузки
+let currentScreenId = 'screen-main';
+let lastScreen = 'screen-main';
 
 // ---- ИЗБРАННОЕ ----
-// Хранится независимо от последнего открытого расписания:
-// favorite = {type:'group'|'teacher', name:'ИС-11'} или null
 function getFavorite() {
     try {
         const raw = localStorage.getItem('btt_favorite');
@@ -47,7 +43,8 @@ function setFavorite(type, name) {
     try {
         if (type && name) localStorage.setItem('btt_favorite', JSON.stringify({ type, name }));
         else localStorage.removeItem('btt_favorite');
-    } catch (e) { /* игнорируем */ }
+    } catch (e) {}
+    updatePushTags();
 }
 
 function isFavorite(type, name) {
@@ -55,7 +52,6 @@ function isFavorite(type, name) {
     return !!(fav && fav.type === type && fav.name === name);
 }
 
-// Переключение избранного для текущего расписания
 function toggleFavoriteForCurrent() {
     if (!currentType || !currentName) return;
     if (isFavorite(currentType, currentName)) {
@@ -67,7 +63,6 @@ function toggleFavoriteForCurrent() {
     updateSettingsUI();
 }
 
-// Обновление кнопки-звезды на экране расписания
 function updateFavoriteUI() {
     const btn = document.getElementById('favorite-btn');
     if (!btn) return;
@@ -77,14 +72,13 @@ function updateFavoriteUI() {
 }
 
 // ---- ТЕМНАЯ ТЕМА ----
-// Возможные значения: 'light' | 'dark'
 function getTheme() {
     try { return localStorage.getItem('btt_theme') || 'light'; }
     catch (e) { return 'light'; }
 }
 
 function setTheme(theme) {
-    try { localStorage.setItem('btt_theme', theme); } catch (e) { /* игнорируем */ }
+    try { localStorage.setItem('btt_theme', theme); } catch (e) {}
     applyTheme(theme);
     updateSettingsUI();
 }
@@ -97,7 +91,7 @@ function applySavedTheme() {
     applyTheme(getTheme());
 }
 
-// Сохранение/восстановление текущего выбора (чтобы после перезагрузки не сбрасывалось в начало)
+// ---- СОХРАНЕНИЕ СОСТОЯНИЯ ----
 function saveState() {
     try {
         localStorage.setItem('btt_state', JSON.stringify({
@@ -106,7 +100,7 @@ function saveState() {
             date: currentDate.getTime(),
             screen: currentScreenId
         }));
-    } catch (e) { /* localStorage недоступен — игнорируем */ }
+    } catch (e) {}
 }
 
 function restoreState() {
@@ -120,7 +114,7 @@ function restoreState() {
             if (typeof st.date === 'number') currentDate = new Date(st.date);
             if (typeof st.screen === 'string') lastScreen = st.screen;
         }
-    } catch (e) { /* повреждённые данные — игнорируем */ }
+    } catch (e) {}
 }
 
 window.onload = () => {
@@ -129,16 +123,13 @@ window.onload = () => {
     loadStats();
     updateWeekUI();
     
-    // Восстанавливаем состояние: последний экран + выбранный тип/имя + дата
     restoreState();
     applySavedTheme();
     updateSettingsUI();
     
-    // Открываем тот экран, где пользователь был до перезагрузки
     const screenToOpen = (lastScreen && document.getElementById(lastScreen)) ? lastScreen : 'screen-main';
     
     if (screenToOpen === 'screen-schedule' && currentType && currentName) {
-        // Экран расписания: нужно восстановить без сброса даты и без смены экрана через openSchedule
         document.getElementById('schedule-type').innerText = currentType === 'group' ? 'Группа' : 'Преподаватель';
         document.getElementById('schedule-name').innerText = currentName;
         updateFavoriteUI();
@@ -165,26 +156,21 @@ function showSettingsScreen() {
 }
 
 function updateSettingsUI() {
-    // Переключатель темы
     const toggle = document.getElementById('theme-toggle');
     if (toggle) toggle.checked = getTheme() === 'dark';
 
-    // Переключатель уведомлений
     const notifToggle = document.getElementById('notif-toggle');
     if (notifToggle) notifToggle.checked = getNotificationsEnabled();
 
-    // Список избранного в настройках
     const list = document.getElementById('favorites-list');
     if (list) {
         const fav = getFavorite();
         if (fav && fav.type && fav.name) {
-            // Имя хранится в data-name, а не в textContent — чтобы звезда и кнопка ✕ не попадали в значение
-            list.innerHTML = `
-                <li onclick="openSchedule('${fav.type}', document.getElementById('fav-name').value)">
-                    <span>⭐ ${escapeHtml(fav.name)}</span>
-                    <input type="hidden" id="fav-name" value="${escapeHtml(fav.name)}">
-                    <button class="btn-remove" onclick="event.stopPropagation(); removeFavorite()">✕</button>
-                </li>`;
+            list.innerHTML = '<li onclick="openSchedule(\'' + fav.type + '\', document.getElementById(\'fav-name\').value)">' +
+                '<span>⭐ ' + escapeHtml(fav.name) + '</span>' +
+                '<input type="hidden" id="fav-name" value="' + escapeHtml(fav.name) + '">' +
+                '<button class="btn-remove" onclick="event.stopPropagation(); removeFavorite()">✕</button>' +
+                '</li>';
         } else {
             list.innerHTML = '<li class="empty">Нет избранного. Откройте расписание и нажмите ☆</li>';
         }
@@ -205,15 +191,14 @@ function showScreen(id) {
     lastScreen = id;
     saveState();
     
-    // Навигация видна всегда
     const nav = document.getElementById('bottom-nav');
     nav.style.display = 'flex';
 
-    // Подсветка иконки в меню
-    document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-    if (id === 'screen-main') document.querySelectorAll('.nav-item')[0].classList.add('active');
-    if (id === 'screen-schedule') document.querySelectorAll('.nav-item')[1].classList.add('active');
-    if (id === 'screen-settings') document.querySelectorAll('.nav-item')[2].classList.add('active');
+    const navItems = document.querySelectorAll('.nav-item');
+    navItems.forEach(item => item.classList.remove('active'));
+    if (id === 'screen-main' && navItems.item(0)) navItems.item(0).classList.add('active');
+    if (id === 'screen-schedule' && navItems.item(1)) navItems.item(1).classList.add('active');
+    if (id === 'screen-settings' && navItems.item(2)) navItems.item(2).classList.add('active');
     
     if (id === 'screen-groups' && allGroups.length === 0) loadGroups();
     if (id === 'screen-teachers' && allTeachers.length === 0) loadTeachers();
@@ -223,12 +208,11 @@ function showScreen(id) {
 async function fetchSheet(range) {
     const cacheKey = 'btt_cache_' + range;
     try {
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}?key=${API_KEY}`;
+        const url = 'https://sheets.googleapis.com/v4/spreadsheets/' + SPREADSHEET_ID + '/values/' + encodeURIComponent(range) + '?key=' + API_KEY;
         const response = await fetch(url);
         if (!response.ok) throw new Error('Ошибка сети');
         
         const data = await response.json();
-        // Защита от undefined
         const values = (data.values || []).map(row => 
             row.map(cell => (cell === undefined || cell === null) ? "" : cell)
         );
@@ -255,15 +239,15 @@ async function loadStats() {
         const first = await fetchSheet(RANGE_TEACHER_FIRST);
         const middle = await fetchSheet(RANGE_TEACHER_MIDDLE);
 
-        const uniqueGroups = new Set(groupsData.map(r => r[0]).filter(g => g && g.length > 2 && g !== '- -'));
+        const uniqueGroups = new Set(groupsData.map(r => r.at(0)).filter(g => g && g.length > 2 && g !== '- -'));
         document.getElementById('stats-groups').innerText = uniqueGroups.size;
 
         const uniqueTeachers = new Set();
         for (let i = 0; i < last.length; i++) {
-            let l = last[i] ? last[i][0] : '';
-            let f = first[i] ? first[i][0] : '';
-            let m = middle[i] ? middle[i][0] : '';
-            let full = `${l} ${f} ${m}`.replace(/\s+/g, ' ').trim();
+            let l = last.at(i) ? last.at(i).at(0) : '';
+            let f = first.at(i) ? first.at(i).at(0) : '';
+            let m = middle.at(i) ? middle.at(i).at(0) : '';
+            let full = (l + ' ' + f + ' ' + m).replace(/\s+/g, ' ').trim();
             if (full && full !== '- - -') uniqueTeachers.add(full);
         }
         document.getElementById('stats-teachers').innerText = uniqueTeachers.size;
@@ -287,462 +271,340 @@ async function loadGroups() {
         const data = await fetchSheet(RANGE_GROUPS);
         const uniqueGroups = new Set();
         data.forEach(row => {
-            let g = row[0] ? row[0].trim() : "";
+            let g = row.at(0) ? row.at(0).trim() : "";
             let cleanCheck = g.replace(/[\s\-—_.,]+/g, '');
             if (cleanCheck !== '' && !g.includes('undefined')) uniqueGroups.add(g);
         });
 
         allGroups = Array.from(uniqueGroups).sort();
         document.getElementById('group-list').innerHTML = allGroups.map(g => 
-            `<div class="grid-item" onclick="openSchedule('group', this.textContent)">${escapeHtml(g)}</div>`
+            '<div class="grid-item" onclick="openSchedule(\'group\', this.textContent)">' + escapeHtml(g) + '</div>'
         ).join('');
-    } catch (e) { alert('Ошибка загрузки данных'); }
-    showLoader(false);
+        } catch (e) { alert('Ошибка загрузки данных'); }
+showLoader(false);
 }
-
 async function loadTeachers() {
-    showLoader(true);
-    try {
-        const last = await fetchSheet(RANGE_TEACHER_LAST);
-        const first = await fetchSheet(RANGE_TEACHER_FIRST);
-        const middle = await fetchSheet(RANGE_TEACHER_MIDDLE);
-        const uniqueTeachers = new Set();
-        
-        for (let i = 0; i < last.length; i++) {
-            let l = last[i] ? last[i][0] : "";
-            let f = first[i] ? first[i][0] : "";
-            let m = middle[i] ? middle[i][0] : "";
-
-            let full = `${l} ${f} ${m}`.replace(/\s+/g, ' ').trim();
-            let cleanCheck = full.replace(/[\s\-—_.,]+/g, '');
-
-            if (cleanCheck !== '' && !full.includes('undefined') && full !== '- - -') {
-                uniqueTeachers.add(full);
-            }
-        }
-        allTeachers = Array.from(uniqueTeachers).sort();
-        document.getElementById('teacher-list').innerHTML = allTeachers.map(t => 
-            `<li onclick="openSchedule('teacher', this.textContent)">${escapeHtml(t)}</li>`
-        ).join('');
-    } catch (e) { alert('Ошибка загрузки данных'); }
-    showLoader(false);
+showLoader(true);
+try {
+const last = await fetchSheet(RANGE_TEACHER_LAST);
+const first = await fetchSheet(RANGE_TEACHER_FIRST);
+const middle = await fetchSheet(RANGE_TEACHER_MIDDLE);
+const uniqueTeachers = new Set();
+for (let i = 0; i < last.length; i++) {
+let l = last.at(i) ? last.at(i).at(0) : "";
+let f = first.at(i) ? first.at(i).at(0) : "";
+let m = middle.at(i) ? middle.at(i).at(0) : "";
+let full = (l + ' ' + f + ' ' + m).replace(/\s+/g, ' ').trim();
+let cleanCheck = full.replace(/[\s-—_.,]+/g, '');
+if (cleanCheck !== '' && !full.includes('undefined') && full !== '- - -') {
+uniqueTeachers.add(full);
 }
-
+}
+allTeachers = Array.from(uniqueTeachers).sort();
+document.getElementById('teacher-list').innerHTML = allTeachers.map(t =>
+    '<li onclick="openSchedule(\'teacher\', this.textContent)">' + escapeHtml(t) + '</li>'
+).join('');
+} catch (e) { alert('Ошибка загрузки данных'); }
+showLoader(false);
+}
 function openSchedule(type, name, keepDate = false) {
-    currentType = type;
-    currentName = normalizeCell(name);
-    document.getElementById('schedule-type').innerText = type === 'group' ? 'Группа' : 'Преподаватель';
-    document.getElementById('schedule-name').innerText = name;
-    // Сбрасываем на сегодня только при новом выборе, а не при обновлении/возврате
-    if (!keepDate) currentDate = new Date();
-    saveState();
-    updateFavoriteUI();
-    updateWeekUI();
-    showScreen('screen-schedule');
-    loadSchedule();
+currentType = type;
+currentName = normalizeCell(name);
+document.getElementById('schedule-type').innerText = type === 'group' ? 'Группа' : 'Преподаватель';
+document.getElementById('schedule-name').innerText = name;
+if (!keepDate) currentDate = new Date();
+saveState();
+updateFavoriteUI();
+updateWeekUI();
+updatePushTags();
+showScreen('screen-schedule');
+loadSchedule();
 }
-
 function goToLastSchedule() {
-    if (currentName === '') {
-        showScreen('screen-groups'); 
-    } else {
-        showScreen('screen-schedule');
-    }
+if (currentName === '') {
+showScreen('screen-groups');
+} else {
+showScreen('screen-schedule');
 }
-
+}
 function filterList(listId, query) {
-    const parent = document.getElementById(listId);
-    const items = parent.children;
-    query = query.toLowerCase();
-    for (let item of items) {
-        item.style.display = item.innerText.toLowerCase().includes(query) ? '' : 'none';
-    }
+const parent = document.getElementById(listId);
+const items = parent.children;
+query = query.toLowerCase();
+for (let item of items) {
+item.style.display = item.innerText.toLowerCase().includes(query) ? '' : 'none';
 }
-
+}
 function goBack() {
-    if (currentType === 'group') showScreen('screen-groups');
-    else if (currentType === 'teacher') showScreen('screen-teachers');
-    else showScreen('screen-main');
+if (currentType === 'group') showScreen('screen-groups');
+else if (currentType === 'teacher') showScreen('screen-teachers');
+else showScreen('screen-main');
 }
-
 // ---- РАБОТА С ДАТАМИ ----
 function getMonday(d) {
-    d = new Date(d);
-    var day = d.getDay(), diff = d.getDate() - day + (day == 0 ? -6 : 1);
-    return new Date(d.setDate(diff));
+d = new Date(d);
+var day = d.getDay(), diff = d.getDate() - day + (day == 0 ? -6 : 1);
+return new Date(d.setDate(diff));
 }
-
 function updateWeekUI() {
-    const monday = getMonday(currentDate);
-    const daysContainer = document.getElementById('days-container');
-    let html = '';
-    const dayNames = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
-    
-    for (let i = 0; i < 6; i++) {
-        let d = new Date(monday);
-        d.setDate(monday.getDate() + i);
-        let isActive = d.getDate() === currentDate.getDate() && d.getMonth() === currentDate.getMonth();
-        
-        html += `
-            <div class="day-item ${isActive ? 'active' : ''}" onclick="selectDay(${d.getTime()})">
-                <div class="day-name">${dayNames[i]}</div>
-                <div class="day-num">${d.getDate()}</div>
-            </div>
-        `;
-    }
-    daysContainer.innerHTML = html;
-
-    let saturday = new Date(monday);
-    saturday.setDate(monday.getDate() + 5);
-    
-    const opt = { day: 'numeric', month: 'short' };
-    let strMon = monday.toLocaleDateString('ru-RU', opt).replace('.', '');
-    let strSat = saturday.toLocaleDateString('ru-RU', opt).replace('.', '');
-    
-    document.getElementById('week-range').innerText = `${strMon} – ${strSat}.`;
+const monday = getMonday(currentDate);
+const daysContainer = document.getElementById('days-container');
+let html = '';
+const dayNames = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+for (let i = 0; i < 6; i++) {
+let d = new Date(monday);
+d.setDate(monday.getDate() + i);
+let isActive = d.getDate() === currentDate.getDate() && d.getMonth() === currentDate.getMonth();
+html += '<div class="day-item ' + (isActive ? 'active' : '') + '" onclick="selectDay(' + d.getTime() + ')">' +
+    '<div class="day-name">' + dayNames[i] + '</div>' +
+    '<div class="day-num">' + d.getDate() + '</div>' +
+    '</div>';
 }
-
+daysContainer.innerHTML = html;
+let saturday = new Date(monday);
+saturday.setDate(monday.getDate() + 5);
+const opt = { day: 'numeric', month: 'short' };
+let strMon = monday.toLocaleDateString('ru-RU', opt).replace('.', '');
+let strSat = saturday.toLocaleDateString('ru-RU', opt).replace('.', '');
+document.getElementById('week-range').innerText = strMon + ' – ' + strSat + '.';
+}
 function selectDay(timestamp) {
-    currentDate = new Date(timestamp);
-    saveState();
-    updateWeekUI();
-    loadSchedule();
+currentDate = new Date(timestamp);
+saveState();
+updateWeekUI();
+loadSchedule();
 }
-
 function changeWeek(delta) {
-    currentDate.setDate(currentDate.getDate() + (delta * 7));
-    saveState();
-    updateWeekUI();
-    loadSchedule();
+currentDate.setDate(currentDate.getDate() + (delta * 7));
+saveState();
+updateWeekUI();
+loadSchedule();
 }
-
 function getTimeForPair(pairNum, dayOfWeek, isDistance) {
-    if (isDistance) {
-        switch (pairNum) {
-            case "1": return "8:30–9:30"; case "2": return "9:40–10:40";
-            case "3": return "10:50–11:50"; case "4": return "12:00–13:00";
-            default: return "";
-        }
-    }
-    if (dayOfWeek === 1) {
-        switch (pairNum) {
-            case "0": return "8:30–9:15"; case "1": return "9:20–10:50";
-            case "2": return "11:00–12:30"; case "3": return "13:15–14:45";
-            case "4": return "14:55–16:25"; default: return "";
-        }
-    }
-    if (dayOfWeek === 6) {
-        switch (pairNum) {
-            case "1": return "8:30–10:00"; case "2": return "10:10–11:40";
-            case "3": return "11:50–13:20"; default: return "";
-        }
-    }
-    switch (pairNum) {
-        case "1": return "8:30–10:00"; case "2": return "10:10–11:40";
-        case "3": return "12:25–13:55"; case "4": return "14:05–15:35";
-        default: return "";
-    }
+if (isDistance) {
+switch (pairNum) {
+case "1": return "8:30–9:30"; case "2": return "9:40–10:40";
+case "3": return "10:50–11:50"; case "4": return "12:00–13:00";
+default: return "";
 }
-
+}
+if (dayOfWeek === 1) {
+switch (pairNum) {
+case "0": return "8:30–9:15"; case "1": return "9:20–10:50";
+case "2": return "11:00–12:30"; case "3": return "13:15–14:45";
+case "4": return "14:55–16:25"; default: return "";
+}
+}
+if (dayOfWeek === 6) {
+switch (pairNum) {
+case "1": return "8:30–10:00"; case "2": return "10:10–11:40";
+case "3": return "11:50–13:20"; default: return "";
+}
+}
+switch (pairNum) {
+case "1": return "8:30–10:00"; case "2": return "10:10–11:40";
+case "3": return "12:25–13:55"; case "4": return "14:05–15:35";
+default: return "";
+}
+}
 async function loadSchedule() {
-    showLoader(true);
-    const targetDay = currentDate.getDate();
-    const targetMonth = currentDate.getMonth() + 1;
-    const targetYear = currentDate.getFullYear();
-    const jsDay = currentDate.getDay(); 
-    const ourDay = jsDay === 0 ? 7 : jsDay; 
-    
-    if (!cachedData) {
-        try { 
-            cachedData = await fetchSheet(RANGE_SCHEDULE); 
-            // Обновляем «отпечаток» расписания для уведомлений
-            if (getNotificationsEnabled()) lastScheduleSnapshot = computeScheduleSnapshot();
-        }  
-        catch (e) { 
-            document.getElementById('schedule-list').innerHTML = '<p style="text-align:center; color:#888; margin-top:20px; font-size:14px;">Нет подключения к интернету.<br>Подключитесь к сети для первой загрузки.</p>';
-            showLoader(false); 
-            return; 
-        }
-    }
-
-    let html = '';
-    for (let row of cachedData) {
-        if (!row || row.length < 5) continue;
-
-        let day = parseInt(row[0]), month = parseInt(row[1]), year = parseInt(row[2]);
-        if (isNaN(day) || isNaN(month) || isNaN(year)) continue;
-        if (day !== targetDay || month !== targetMonth || year !== targetYear) continue;
-
-        // Строки с незаполненными правыми колонками приходят ОБРЕЗАННЫМИ от API,
-        // поэтому нельзя требовать row.length >= 11 — достаём ячейки с запасом
-        let pairNum = normalizeCell(row[3]);
-        let group = normalizeCell(row[4]);
-        let subject = normalizeCell(row[6]);
-        let room = normalizeCell(row[7]);
-        let teacher = normalizeCell(`${(row[8] || '')} ${(row[9] || '')} ${(row[10] || '')}`);
-
-        if (currentType === 'group' && group.toLowerCase() !== currentName.toLowerCase()) continue;
-        if (currentType === 'teacher' && teacher.toLowerCase() !== currentName.toLowerCase()) continue;
-
-        let numberStr = pairNum === '0' ? '' : pairNum + '.';
-        let displayTeacher = currentType === 'teacher' ? group : teacher;
-        
-        let isDistance = subject.toLowerCase().includes('(до)') || subject.toLowerCase().includes('дистант');
-        let timeStr = getTimeForPair(pairNum, ourDay, isDistance);
-
-        html += `
-            <div class="lesson-card">
-                <div class="lesson-top">
-                    <span class="lesson-num">${escapeHtml(numberStr)}</span>
-                    <span class="lesson-title">${escapeHtml(subject)}</span>
-                </div>
-                <div class="lesson-time">${escapeHtml(timeStr)}</div>
-                <div class="lesson-bottom">
-                    <div class="lesson-teacher"><span style="color:#1A237E;margin-right:6px;">👤</span>${escapeHtml(displayTeacher)}</div>
-                    <div class="lesson-room">${escapeHtml(room)}</div>
-                </div>
-            </div>
-        `;
-    }
-
-    if (html === '') html = '<p style="text-align:center; color:#888; margin-top:20px; font-size:14px;">На этот день пар нет</p>';
-    document.getElementById('schedule-list').innerHTML = html;
-    // Обновляем снапшот и слежение после каждого обновления кэша расписания
-    if (getNotificationsEnabled()) scheduleSnapshotAndWatch();
-    showLoader(false);
+showLoader(true);
+const targetDay = currentDate.getDate();
+const targetMonth = currentDate.getMonth() + 1;
+const targetYear = currentDate.getFullYear();
+const jsDay = currentDate.getDay();
+const ourDay = jsDay === 0 ? 7 : jsDay;
+if (!cachedData) {
+try {
+cachedData = await fetchSheet(RANGE_SCHEDULE);
 }
-
+catch (e) {
+document.getElementById('schedule-list').innerHTML = '<p style="text-align:center; color:#888; margin-top:20px; font-size:14px;">Нет подключения к интернету.<br>Подключитесь к сети для первой загрузки.</p>';
+showLoader(false);
+return;
+}
+}
+let html = '';
+for (let row of cachedData) {
+if (!row || row.length < 5) continue;
+let day = parseInt(row.at(0)), month = parseInt(row.at(1)), year = parseInt(row.at(2));
+if (isNaN(day) || isNaN(month) || isNaN(year)) continue;
+if (day !== targetDay || month !== targetMonth || year !== targetYear) continue;
+let pairNum = normalizeCell(row.at(3));
+let group = normalizeCell(row.at(4));
+let subject = normalizeCell(row.at(6));
+let room = normalizeCell(row.at(7));
+let teacher = normalizeCell((row.at(8) || '') + ' ' + (row.at(9) || '') + ' ' + (row.at(10) || ''));
+if (currentType === 'group' && group.toLowerCase() !== currentName.toLowerCase()) continue;
+if (currentType === 'teacher' && teacher.toLowerCase() !== currentName.toLowerCase()) continue;
+let numberStr = pairNum === '0' ? '' : pairNum + '.';
+let displayTeacher = currentType === 'teacher' ? group : teacher;
+let isDistance = subject.toLowerCase().includes('(до)') || subject.toLowerCase().includes('дистант');
+let timeStr = getTimeForPair(pairNum, ourDay, isDistance);
+html += '<div class="lesson-card">' +
+'<div class="lesson-top">' +
+'<span class="lesson-num">' + escapeHtml(numberStr) + '</span>' +
+'<span class="lesson-title">' + escapeHtml(subject) + '</span>' +
+'</div>' +
+'<div class="lesson-time">' + escapeHtml(timeStr) + '</div>' +
+'<div class="lesson-bottom">' +
+'<div class="lesson-teacher"><span style="color:#1A237E;margin-right:6px;">👤</span>' + escapeHtml(displayTeacher) + '</div>' +
+'<div class="lesson-room">' + escapeHtml(room) + '</div>' +
+'</div>' +
+'</div>';
+}
+if (html === '') html = '<p style="text-align:center; color:#888; margin-top:20px; font-size:14px;">На этот день пар нет</p>';
+document.getElementById('schedule-list').innerHTML = html;
+showLoader(false);
+}
 function showLoader(show) {
-    document.getElementById('loader').classList.toggle('active', show);
+document.getElementById('loader').classList.toggle('active', show);
 }
-
-// ==========================================
-// ЛОГИКА ОБНОВЛЕНИЯ ДАННЫХ (Без перезагрузки страницы)
 // ==========================================
 // ОБНОВЛЕНИЕ ДАННЫХ (pull-to-refresh)
 // ==========================================
 window.updateData = async () => {
-    cachedData = null;
-    allGroups = [];
-    allTeachers = [];
-    
-    localStorage.removeItem('btt_cache_' + RANGE_GROUPS);
-    localStorage.removeItem('btt_cache_' + RANGE_TEACHER_LAST);
-    localStorage.removeItem('btt_cache_' + RANGE_TEACHER_FIRST);
-    localStorage.removeItem('btt_cache_' + RANGE_TEACHER_MIDDLE);
-    localStorage.removeItem('btt_cache_' + RANGE_SCHEDULE);
-    
-    await loadStats();
-    
-    if (document.getElementById('screen-groups').classList.contains('active')) await loadGroups();
-    else if (document.getElementById('screen-teachers').classList.contains('active')) await loadTeachers();
-    else if (document.getElementById('screen-schedule').classList.contains('active')) await loadSchedule();
+cachedData = null;
+allGroups = [];
+allTeachers = [];
+localStorage.removeItem('btt_cache_' + RANGE_GROUPS);
+localStorage.removeItem('btt_cache_' + RANGE_TEACHER_LAST);
+localStorage.removeItem('btt_cache_' + RANGE_TEACHER_FIRST);
+localStorage.removeItem('btt_cache_' + RANGE_TEACHER_MIDDLE);
+localStorage.removeItem('btt_cache_' + RANGE_SCHEDULE);
+await loadStats();
+if (document.getElementById('screen-groups').classList.contains('active')) await loadGroups();
+else if (document.getElementById('screen-teachers').classList.contains('active')) await loadTeachers();
+else if (document.getElementById('screen-schedule').classList.contains('active')) await loadSchedule();
 };
-
-// ---- PULL-TO-REFRESH (обновление свайпом сверху вниз) ----
 (function initPullToRefresh() {
-    let startY = 0;
-    let pulling = false;
-    let isRefreshing = false;
-    const THRESHOLD = 70; // высота потянуть для срабатывания
-
-    document.addEventListener('touchstart', (e) => {
-        if (isRefreshing) return;
-        // Свайп работает только когда контент прокручен в самый верх
-        const scroller = document.querySelector('.screen.active .content');
-        if (scroller && scroller.scrollTop <= 0) {
-            startY = e.touches[0].clientY;
-            pulling = true;
-        }
-    }, { passive: true });
-
-    document.addEventListener('touchmove', (e) => {
-        if (!pulling || isRefreshing) return;
-        const delta = e.touches[0].clientY - startY;
-        if (delta > THRESHOLD) {
-            pulling = false;
-            isRefreshing = true;
-            showLoader(true);
-            window.updateData().finally(() => {
-                showLoader(false);
-                // небольшая задержка, чтобы индикатор не мигал при повторном свайпе
-                setTimeout(() => { isRefreshing = false; }, 400);
-            });
-        }
-    }, { passive: true });
-
-    document.addEventListener('touchend', () => { pulling = false; }, { passive: true });
+let startY = 0;
+let pulling = false;
+let isRefreshing = false;
+const THRESHOLD = 70;
+document.addEventListener('touchstart', (e) => {
+if (isRefreshing) return;
+const scroller = document.querySelector('.screen.active .content');
+if (scroller && scroller.scrollTop <= 0) {
+startY = e.touches.item(0).clientY;
+pulling = true;
+}
+}, { passive: true });
+document.addEventListener('touchmove', (e) => {
+if (!pulling || isRefreshing) return;
+const delta = e.touches.item(0).clientY - startY;
+if (delta > THRESHOLD) {
+pulling = false;
+isRefreshing = true;
+showLoader(true);
+window.updateData().finally(() => {
+showLoader(false);
+setTimeout(() => { isRefreshing = false; }, 400);
+});
+}
+}, { passive: true });
+document.addEventListener('touchend', () => { pulling = false; }, { passive: true });
 })();
-
-// ---- УВЕДОМЛЕНИЯ ОБ ИЗМЕНЕНИЯХ РАСПИСАНИЯ ----
-const NOTIF_CHECK_INTERVAL = 15 * 60 * 1000; // проверка раз в 15 минут
-let lastScheduleSnapshot = null; // «отпечаток» расписания для сравнения
-
-function getNotificationsEnabled() {
-    try { return localStorage.getItem('btt_notifications') === 'on'; }
-    catch (e) { return false; }
-}
-
-function setNotificationsEnabled(enabled) {
-    try { localStorage.setItem('btt_notifications', enabled ? 'on' : 'off'); } catch (e) {}
-    updateSettingsUI();
-    if (enabled) {
-        requestNotificationPermission().then(granted => {
-            if (granted) {
-                scheduleSnapshotAndWatch();
-                showAppNotification('Уведомления включены', 'Вы будете получать оповещения об изменениях в расписании.');
-            } else {
-                setNotificationsEnabled(false);
-            }
-        });
-    } else {
-        stopScheduleWatcher();
-    }
-}
-
-async function requestNotificationPermission() {
-    if (!('Notification' in window)) return false;
-    if (Notification.permission === 'granted') return true;
-    if (Notification.permission === 'denied') return false;
-    const result = await Notification.requestPermission();
-    return result === 'granted';
-}
-
-// Показ уведомления (безопасно, даже если разрешение не выдано)
-// На мобильных (Android/iOS) системные уведомления можно показывать ТОЛЬКО через service worker,
-// поэтому дожидаемся navigator.serviceWorker.ready и вызываем reg.showNotification напрямую.
-async function showAppNotification(title, body) {
-    if (!('Notification' in window) || Notification.permission !== 'granted') return;
-    try {
-        if ('serviceWorker' in navigator) {
-            const reg = await navigator.serviceWorker.ready;
-            if (reg && reg.showNotification) {
-                await reg.showNotification(title, {
-                    body,
-                    icon: './logo.png',
-                    badge: './logo.png',
-                    vibrate: [200, 100, 200],
-                    tag: 'btt-schedule' // не плодим дубликаты
-                });
-                return;
-            }
-        }
-        // Запасной путь для десктопных браузеров без активного SW
-        new Notification(title, { body, icon: 'logo.png' });
-    } catch (e) { console.warn('Не удалось показать уведомление:', e); }
-}
-
-// Снимок расписания выбранной группы/преподавателя — короткая строка для сравнения
-function computeScheduleSnapshot() {
-    if (!cachedData || !currentType || !currentName) return null;
-    const rows = cachedData
-        .filter(row => {
-            if (!row || row.length < 5) return false;
-            const group = normalizeCell(row[4]);
-            const teacher = normalizeCell(`${row[8] || ''} ${row[9] || ''} ${row[10] || ''}`);
-            if (currentType === 'group') return group.toLowerCase() === currentName.toLowerCase();
-            return teacher.toLowerCase() === currentName.toLowerCase();
-        })
-        .map(row => row.slice(0, 11).join('|'))
-        .sort()
-        .join('\n');
-    return rows;
-}
-
-let watchTimer = null;
-function scheduleSnapshotAndWatch() {
-    if (!getNotificationsEnabled()) return;
-    // Снимок после текущей загрузки данных
-    if (cachedData) lastScheduleSnapshot = computeScheduleSnapshot();
-    startScheduleWatcher();
-}
-
-function startScheduleWatcher() {
-    if (watchTimer) return;
-    watchTimer = setInterval(checkScheduleChanges, NOTIF_CHECK_INTERVAL);
-}
-
-function stopScheduleWatcher() {
-    if (watchTimer) { clearInterval(watchTimer); watchTimer = null; }
-}
-
-async function checkScheduleChanges() {
-    if (!getNotificationsEnabled() || !currentType || !currentName) return;
-    try {
-        // Тихая подгрузка данных напрямую (минуя основной кэш)
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(RANGE_SCHEDULE)}?key=${API_KEY}`;
-        const resp = await fetch(url);
-        if (!resp.ok) return;
-        const data = await resp.json();
-        const freshRows = (data.values || []).map(row =>
-            row.map(cell => (cell === undefined || cell === null) ? '' : cell)
-        );
-
-        // Считаем снимок на свежих данных
-        const saved = cachedData;
-        cachedData = freshRows;
-        const freshSnapshot = computeScheduleSnapshot();
-        cachedData = saved;
-
-        if (freshSnapshot === null) return;
-        
-        if (lastScheduleSnapshot !== null && freshSnapshot !== lastScheduleSnapshot) {
-            showAppNotification(
-                'Расписание изменилось',
-                `В расписании для «${currentName}» произошли изменения. Откройте приложение, чтобы посмотреть.`
-            );
-        }
-        lastScheduleSnapshot = freshSnapshot;
-    } catch (e) { /* нет сети — тихо пропускаем */ }
-}
-
-// Автостарт наблюдателя, если уведомления уже включены
-if (getNotificationsEnabled()) {
-    requestNotificationPermission().then(granted => {
-        if (granted) scheduleSnapshotAndWatch();
-    });
-}
-
 // ==========================================
-// ЛОГИКА PWA (Только установка и фоновое обновление)
+// WEB PUSH УВЕДОМЛЕНИЯ (ONESIGNAL)
+// ==========================================
+window.OneSignalDeferred = window.OneSignalDeferred || [];
+OneSignalDeferred.push(async function(OneSignal) {
+await OneSignal.init({
+appId: ONESIGNAL_APP_ID,
+serviceWorkerParam: { scope: './' },
+serviceWorkerPath: 'sw.js',
+allowLocalhostAsSecureOrigin: true
+});
+const isSubscribed = OneSignal.User.PushSubscription.optedIn;
+localStorage.setItem('btt_notifications', isSubscribed ? 'on' : 'off');
+updateSettingsUI();
+updatePushTags();
+});
+function getNotificationsEnabled() {
+try { return localStorage.getItem('btt_notifications') === 'on'; }
+catch (e) { return false; }
+}
+async function setNotificationsEnabled(enabled) {
+if (!window.OneSignal) {
+alert('Сервис уведомлений ещё загружается, попробуйте через пару секунд.');
+updateSettingsUI();
+return;
+}
+if (enabled) {
+const fav = getFavorite();
+if (!fav && !currentName) {
+alert('Сначала откройте расписание нужной группы или преподавателя (или добавьте его в избранное ⭐).');
+localStorage.setItem('btt_notifications', 'off');
+updateSettingsUI();
+return;
+}
+try {
+await OneSignal.Notifications.requestPermission();
+await OneSignal.User.PushSubscription.optIn();
+if (OneSignal.User.PushSubscription.optedIn) {
+localStorage.setItem('btt_notifications', 'on');
+await updatePushTags();
+} else {
+localStorage.setItem('btt_notifications', 'off');
+alert('Разрешение на уведомления не выдано в настройках браузера.');
+}
+} catch (e) {
+console.error(e);
+localStorage.setItem('btt_notifications', 'off');
+}
+} else {
+await OneSignal.User.PushSubscription.optOut();
+localStorage.setItem('btt_notifications', 'off');
+}
+updateSettingsUI();
+}
+async function updatePushTags() {
+if (!window.OneSignal) return;
+const fav = getFavorite();
+const targetName = normalizeCell(fav ? fav.name : currentName).toLowerCase();
+if (targetName) {
+// Подписка получает push только по своему target (группа/преподаватель)
+await OneSignal.User.addTag('target', targetName);
+} else {
+// Нет выбранного расписания — снимаем тег, чтобы не получать чужие push
+await OneSignal.User.removeTag('target');
+}
+}
+// ==========================================
+// ЛОГИКА PWA
 // ==========================================
 if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
-            reg.update();
-        });
-    });
+window.addEventListener('load', () => {
+navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+reg.update();
+});
+});
 }
-
-// Логика установки приложения
 let deferredPrompt;
 const installBtn = document.getElementById('install-btn');
 const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-
 if (isIOS && !isStandalone) installBtn.style.display = 'block';
-
 window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-    if (!isStandalone) installBtn.style.display = 'block';
+e.preventDefault();
+deferredPrompt = e;
+if (!isStandalone) installBtn.style.display = 'block';
 });
-
 if (installBtn) {
-    installBtn.addEventListener('click', async () => {
-        if (isIOS) {
-            alert("Чтобы установить приложение на iPhone:\n\n1. Нажмите кнопку 'Поделиться' в Safari.\n2. Выберите 'На экран «Домой»'.\n3. Нажмите 'Добавить'.");
-            return;
-        }
-        if (deferredPrompt) {
-            deferredPrompt.prompt();
-            await deferredPrompt.userChoice;
-            deferredPrompt = null;
-            installBtn.style.display = 'none';
-        }
-    });
+installBtn.addEventListener('click', async () => {
+if (isIOS) {
+alert("Чтобы установить приложение на iPhone:\n\n1. Нажмите кнопку 'Поделиться' в Safari.\n2. Выберите 'На экран «Домой»'.\n3. Нажмите 'Добавить'.");
+return;
 }
-
+if (deferredPrompt) {
+deferredPrompt.prompt();
+await deferredPrompt.userChoice;
+deferredPrompt = null;
+installBtn.style.display = 'none';
+}
+});
+}
 window.addEventListener('appinstalled', () => {
-    installBtn.style.display = 'none';
+installBtn.style.display = 'none';
 });
