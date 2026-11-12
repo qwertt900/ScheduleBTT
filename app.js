@@ -527,8 +527,7 @@ try {
 await OneSignal.init({
     appId: ONESIGNAL_APP_ID,
     serviceWorkerPath: '/OneSignalSDKWorker.js', // Указываем на наш новый файл
-    serviceWorkerParam: { scope: '/' },
-    allowLocalhostAsSecureOrigin: false
+    serviceWorkerParam: { scope: '/ScheduleBTT/' },
 });
 oneSignalReady = true;
 const isSubscribed = Boolean(OneSignal.User.PushSubscription.optedIn);
