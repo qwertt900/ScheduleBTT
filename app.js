@@ -526,7 +526,7 @@ OneSignalDeferred.push(async function(OneSignal) {
 try {
 await OneSignal.init({
     appId: ONESIGNAL_APP_ID,
-    serviceWorkerPath: '/OneSignalSDKWorker.js', // Указываем на наш новый файл
+    serviceWorkerPath: 'ScheduleBTT/OneSignalSDKWorker.js', // Указываем на наш новый файл
     serviceWorkerParam: { scope: '/ScheduleBTT/' },
 });
 oneSignalReady = true;
