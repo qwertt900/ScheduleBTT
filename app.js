@@ -1,5 +1,5 @@
 const API_KEY = 'AIzaSyB20VY7WRY-Bkq66mH5wau-tWOWEgYtv1E';   
-const SPREADSHEET_ID = '1kk3VooUp2CTy-Vyra25QcMtK9VXKyC6WGqE7Dbn85I0';
+const SPREADSHEET_ID = '1LsjCmsElzfQr2kJWn5JBeKVTh66bR7zxIOGZgqoFCAY';
 const ONESIGNAL_APP_ID = '835a2543-5500-41c9-b1dc-59c9f2d37420';
 
 const RANGE_GROUPS = "'Расписание'!E7:E";

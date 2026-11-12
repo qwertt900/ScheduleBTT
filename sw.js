@@ -1,6 +1,6 @@
 importScripts('https://onesignal.com');
 
-const CACHE_NAME = 'btt-schedule-v20';
+const CACHE_NAME = 'btt-schedule-v21';
 const ASSETS = [
   './',
   './index.html',
