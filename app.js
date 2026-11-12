@@ -238,6 +238,7 @@ async function fetchSheet(range) {
     }
 }
 
+
 async function loadStats() {
     try {
         showLoader(true);
@@ -534,12 +535,12 @@ let oneSignalReady = false;
 window.OneSignalDeferred = window.OneSignalDeferred || [];
 OneSignalDeferred.push(async function(OneSignal) {
 try {
-await OneSignal.init({
-appId: ONESIGNAL_APP_ID,
-serviceWorkerParam: { scope: './' },
-serviceWorkerPath: 'sw.js',
-allowLocalhostAsSecureOrigin: true
-});
+        await OneSignal.init({
+            appId: ONESIGNAL_APP_ID,
+            serviceWorkerPath: 'sw.js',
+            allowLocalhostAsSecureOrigin: true
+        });
+
 oneSignalReady = true;
 const isSubscribed = Boolean(OneSignal.User.PushSubscription.optedIn);
 localStorage.setItem('btt_notifications', isSubscribed ? 'on' : 'off');

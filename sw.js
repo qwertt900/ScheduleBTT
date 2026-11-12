@@ -1,7 +1,6 @@
-// Подключаем воркер OneSignal для приема фоновых Push-уведомлений
-importScripts('https://onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
+importScripts('https://onesignal.com');
 
-const CACHE_NAME = 'btt-schedule-v19';
+const CACHE_NAME = 'btt-schedule-v20';
 const ASSETS = [
   './',
   './index.html',
@@ -51,6 +50,12 @@ self.addEventListener('fetch', (e) => {
         }
         return response;
       })
-      .catch(() => caches.match(e.request))
+      .catch(async () => {
+        const cached = await caches.match(e.request);
+        return cached || new Response('Нет подключения к сети', {
+          status: 503,
+          statusText: 'Service Unavailable'
+        });
+      })
   );
 });
