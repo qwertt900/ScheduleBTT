@@ -215,7 +215,7 @@ function showScreen(id) {
 async function fetchSheet(range) {
     const cacheKey = 'btt_cache_' + range;
     try {
-                const url = [
+                        const url = [
             'https://googleapis.com',
             'v4',
             'spreadsheets',
@@ -542,9 +542,10 @@ let oneSignalReady = false;
 window.OneSignalDeferred = window.OneSignalDeferred || [];
 OneSignalDeferred.push(async function(OneSignal) {
 try {
-        await OneSignal.init({
+                await OneSignal.init({
             appId: ONESIGNAL_APP_ID,
-            serviceWorkerPath: 'sw.js',
+            serviceWorkerParam: { scope: '/ScheduleBTT/' },
+            serviceWorkerPath: '/ScheduleBTT/sw.js',
             allowLocalhostAsSecureOrigin: true
         });
 
