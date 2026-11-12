@@ -285,7 +285,7 @@ async function loadGroups() {
         });
 allGroups = Array.from(uniqueGroups).sort();
 document.getElementById('group-list').innerHTML = allGroups.map(g =>
-'' + escapeHtml(g) + ''
+    `<div class="grid-item" onclick="openSchedule('group', '${escapeHtml(g)}')">${escapeHtml(g)}</div>`
 ).join('');
 } catch (e) {
 alert('Ошибка загрузки данных');
@@ -311,7 +311,7 @@ uniqueTeachers.add(full);
 }
 allTeachers = Array.from(uniqueTeachers).sort();
 document.getElementById('teacher-list').innerHTML = allTeachers.map(t =>
-'' + escapeHtml(t) + ''
+    `<li onclick="openSchedule('teacher', '${escapeHtml(t)}')">${escapeHtml(t)}</li>`
 ).join('');
 } catch (e) {
 alert('Ошибка загрузки данных');
@@ -367,10 +367,10 @@ for (let i = 0; i < 6; i++) {
 let d = new Date(monday);
 d.setDate(monday.getDate() + i);
 let isActive = d.getDate() === currentDate.getDate() && d.getMonth() === currentDate.getMonth();
-html += '' +
-'' + dayNames[i] + '' +
-'' + d.getDate() + '' +
-'';
+html += `<div class="day-item ${isActive ? 'active' : ''}" onclick="selectDay(${d.getTime()})">
+    <div class="day-name">${dayNames[i]}</div>
+    <div class="day-num">${d.getDate()}</div>
+</div>`;
 }
 daysContainer.innerHTML = html;
 let saturday = new Date(monday);
@@ -452,17 +452,17 @@ let numberStr = pairNum === '0' ? '' : pairNum + '.';
 let displayTeacher = currentType === 'teacher' ? group : teacher;
 let isDistance = subject.toLowerCase().includes('(до)') || subject.toLowerCase().includes('дистант');
 let timeStr = getTimeForPair(pairNum, ourDay, isDistance);
-html += '' +
-'' +
-'' + escapeHtml(numberStr) + '' +
-'' + escapeHtml(subject) + '' +
-'' +
-'' + escapeHtml(timeStr) + '' +
-'' +
-'👤' + escapeHtml(displayTeacher) + '' +
-'' + escapeHtml(room) + '' +
-'' +
-'';
+html += `<div class="lesson-card">
+    <div class="lesson-top">
+        <div class="lesson-num">${escapeHtml(numberStr)}</div>
+        <div class="lesson-title">${escapeHtml(subject)}</div>
+    </div>
+    <div class="lesson-time">${escapeHtml(timeStr)}</div>
+    <div class="lesson-bottom">
+        <div class="lesson-teacher">👤 ${escapeHtml(displayTeacher)}</div>
+        <div class="lesson-room">${escapeHtml(room)}</div>
+    </div>
+</div>`;
 }
 if (html === '') html = 'На этот день пар нет';
 document.getElementById('schedule-list').innerHTML = html;
@@ -525,10 +525,10 @@ window.OneSignalDeferred = window.OneSignalDeferred || [];
 OneSignalDeferred.push(async function(OneSignal) {
 try {
 await OneSignal.init({
-appId: ONESIGNAL_APP_ID,
-serviceWorkerParam: { scope: '/' },
-serviceWorkerPath: '/sw.js',
-allowLocalhostAsSecureOrigin: true
+    appId: ONESIGNAL_APP_ID,
+    serviceWorkerPath: '/OneSignalSDKWorker.js', // Указываем на наш новый файл
+    serviceWorkerParam: { scope: '/' },
+    allowLocalhostAsSecureOrigin: true
 });
 oneSignalReady = true;
 const isSubscribed = Boolean(OneSignal.User.PushSubscription.optedIn);
