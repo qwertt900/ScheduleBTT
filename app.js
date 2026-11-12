@@ -215,14 +215,7 @@ function showScreen(id) {
 async function fetchSheet(range) {
     const cacheKey = 'btt_cache_' + range;
     try {
-                const url = [
-            'https://googleapis.com',
-            'v4',
-            'spreadsheets',
-            SPREADSHEET_ID,
-            'values',
-            encodeURIComponent(range)
-        ].join('/') + '?key=' + API_KEY;
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}?key=${API_KEY}`;
 
         const response = await fetch(url);
         if (!response.ok) throw new Error('Ошибка сети: ' + response.status);
@@ -533,8 +526,8 @@ OneSignalDeferred.push(async function(OneSignal) {
 try {
 await OneSignal.init({
 appId: ONESIGNAL_APP_ID,
-serviceWorkerParam: { scope: '/ScheduleBTT/' },
-serviceWorkerPath: '/ScheduleBTT/sw.js',
+serviceWorkerParam: { scope: '/' },
+serviceWorkerPath: '/sw.js',
 allowLocalhostAsSecureOrigin: true
 });
 oneSignalReady = true;
