@@ -526,8 +526,8 @@ OneSignalDeferred.push(async function(OneSignal) {
 try {
 await OneSignal.init({
     appId: ONESIGNAL_APP_ID,
-    serviceWorkerPath: 'ScheduleBTT/OneSignalSDKWorker.js', // Указываем на наш новый файл
-    serviceWorkerParam: { scope: '/ScheduleBTT/' },
+    serviceWorkerPath: 'ScheduleBTT/OneSignalSDKWorker.js', 
+    serviceWorkerParam: { scope: '/ScheduleBTT/' }
 });
 oneSignalReady = true;
 const isSubscribed = Boolean(OneSignal.User.PushSubscription.optedIn);
