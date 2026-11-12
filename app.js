@@ -215,7 +215,7 @@ function showScreen(id) {
 async function fetchSheet(range) {
     const cacheKey = 'btt_cache_' + range;
     try {
-        const url = [
+                const url = [
             'https://googleapis.com',
             'v4',
             'spreadsheets',
