@@ -1,7 +1,7 @@
 // Подключаем воркер OneSignal для приема фоновых Push-уведомлений
 importScripts('https://onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
 
-const CACHE_NAME = 'btt-schedule-v17';
+const CACHE_NAME = 'btt-schedule-v19';
 const ASSETS = [
   './',
   './index.html',

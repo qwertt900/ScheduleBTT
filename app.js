@@ -1,5 +1,5 @@
 const API_KEY = 'AIzaSyB20VY7WRY-Bkq66mH5wau-tWOWEgYtv1E';   
-const SPREADSHEET_ID = '1LsjCmsElzfQr2kJWn5JBeKVTh66bR7zxIOGZgqoFCAY';
+const SPREADSHEET_ID = '1kk3VooUp2CTy-Vyra25QcMtK9VXKyC6WGqE7Dbn85I0';
 const ONESIGNAL_APP_ID = '835a2543-5500-41c9-b1dc-59c9f2d37420';
 
 const RANGE_GROUPS = "'Расписание'!E7:E";
@@ -108,9 +108,11 @@ function restoreState() {
         const raw = localStorage.getItem('btt_state');
         if (!raw) return;
         const st = JSON.parse(raw);
-        if (st && st.type && st.name) {
-            currentType = st.type;
-            currentName = st.name;
+        if (st) {
+            if (st.type && st.name) {
+                currentType = st.type;
+                currentName = st.name;
+            }
             if (typeof st.date === 'number') currentDate = new Date(st.date);
             if (typeof st.screen === 'string') lastScreen = st.screen;
         }
@@ -119,7 +121,11 @@ function restoreState() {
 
 window.onload = () => {
     const options = { weekday: 'long', day: 'numeric', month: 'long' };
-    document.getElementById('current-date-main').innerText = currentDate.toLocaleDateString('ru-RU', options);
+    const mainDateEl = document.getElementById('current-date-main');
+    if (mainDateEl) {
+        mainDateEl.innerText = currentDate.toLocaleDateString('ru-RU', options);
+    }
+    
     loadStats();
     updateWeekUI();
     
@@ -185,14 +191,15 @@ function removeFavorite() {
 
 function showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    document.getElementById(id).classList.add('active');
+    const targetScreen = document.getElementById(id);
+    if (targetScreen) targetScreen.classList.add('active');
     
     currentScreenId = id;
     lastScreen = id;
     saveState();
     
     const nav = document.getElementById('bottom-nav');
-    nav.style.display = 'flex';
+    if (nav) nav.style.display = 'flex';
 
     const navItems = document.querySelectorAll('.nav-item');
     navItems.forEach(item => item.classList.remove('active'));
@@ -208,7 +215,7 @@ function showScreen(id) {
 async function fetchSheet(range) {
     const cacheKey = 'btt_cache_' + range;
     try {
-        const url = 'https://sheets.googleapis.com/v4/spreadsheets/' + SPREADSHEET_ID + '/values/' + encodeURIComponent(range) + '?key=' + API_KEY;
+        const url = 'https://googleapis.com' + SPREADSHEET_ID + '/values/' + encodeURIComponent(range) + '?key=' + API_KEY;
         const response = await fetch(url);
         if (!response.ok) throw new Error('Ошибка сети');
         
@@ -277,10 +284,12 @@ async function loadGroups() {
         });
 
         allGroups = Array.from(uniqueGroups).sort();
-        document.getElementById('group-list').innerHTML = allGroups.map(g => 
-            '<div class="grid-item" onclick="openSchedule(\'group\', this.textContent)">' + escapeHtml(g) + '</div>'
-        ).join('');
-        } catch (e) { alert('Ошибка загрузки данных'); }
+document.getElementById('group-list').innerHTML = allGroups.map(g => 
+    '<div class="grid-item" onclick="openSchedule(\'group\', this.textContent)">' + escapeHtml(g) + '</div>'
+).join('');
+} catch (e) {
+alert('Ошибка загрузки данных');
+}
 showLoader(false);
 }
 async function loadTeachers() {
@@ -304,7 +313,10 @@ allTeachers = Array.from(uniqueTeachers).sort();
 document.getElementById('teacher-list').innerHTML = allTeachers.map(t =>
     '<li onclick="openSchedule(\'teacher\', this.textContent)">' + escapeHtml(t) + '</li>'
 ).join('');
-} catch (e) { alert('Ошибка загрузки данных'); }
+
+} catch (e) {
+alert('Ошибка загрузки данных');
+}
 showLoader(false);
 }
 function openSchedule(type, name, keepDate = false) {
@@ -347,26 +359,29 @@ var day = d.getDay(), diff = d.getDate() - day + (day == 0 ? -6 : 1);
 return new Date(d.setDate(diff));
 }
 function updateWeekUI() {
-const monday = getMonday(currentDate);
-const daysContainer = document.getElementById('days-container');
-let html = '';
-const dayNames = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
-for (let i = 0; i < 6; i++) {
-let d = new Date(monday);
-d.setDate(monday.getDate() + i);
-let isActive = d.getDate() === currentDate.getDate() && d.getMonth() === currentDate.getMonth();
-html += '<div class="day-item ' + (isActive ? 'active' : '') + '" onclick="selectDay(' + d.getTime() + ')">' +
-    '<div class="day-name">' + dayNames[i] + '</div>' +
-    '<div class="day-num">' + d.getDate() + '</div>' +
-    '</div>';
-}
-daysContainer.innerHTML = html;
-let saturday = new Date(monday);
-saturday.setDate(monday.getDate() + 5);
-const opt = { day: 'numeric', month: 'short' };
-let strMon = monday.toLocaleDateString('ru-RU', opt).replace('.', '');
-let strSat = saturday.toLocaleDateString('ru-RU', opt).replace('.', '');
-document.getElementById('week-range').innerText = strMon + ' – ' + strSat + '.';
+    const monday = getMonday(currentDate);
+    const daysContainer = document.getElementById('days-container');
+    if (!daysContainer) return;
+
+    let html = '';
+    const dayNames = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+    for (let i = 0; i < 6; i++) {
+        let d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        let isActive = d.getDate() === currentDate.getDate() && d.getMonth() === currentDate.getMonth();
+        html += '<div class="day-item ' + (isActive ? 'active' : '') + '" onclick="selectDay(' + d.getTime() + ')">' +
+            '<div class="day-name">' + dayNames[i] + '</div>' +
+            '<div class="day-num">' + d.getDate() + '</div>' +
+            '</div>';
+    }
+    daysContainer.innerHTML = html;
+
+    let saturday = new Date(monday);
+    saturday.setDate(monday.getDate() + 5);
+    const opt = { day: 'numeric', month: 'short' };
+    let strMon = monday.toLocaleDateString('ru-RU', opt).replace('.', '');
+    let strSat = saturday.toLocaleDateString('ru-RU', opt).replace('.', '');
+    document.getElementById('week-range').innerText = strMon + ' – ' + strSat + '.';
 }
 function selectDay(timestamp) {
 currentDate = new Date(timestamp);
@@ -408,57 +423,64 @@ default: return "";
 }
 }
 async function loadSchedule() {
-showLoader(true);
-const targetDay = currentDate.getDate();
-const targetMonth = currentDate.getMonth() + 1;
-const targetYear = currentDate.getFullYear();
-const jsDay = currentDate.getDay();
-const ourDay = jsDay === 0 ? 7 : jsDay;
-if (!cachedData) {
-try {
-cachedData = await fetchSheet(RANGE_SCHEDULE);
-}
-catch (e) {
-document.getElementById('schedule-list').innerHTML = '<p style="text-align:center; color:#888; margin-top:20px; font-size:14px;">Нет подключения к интернету.<br>Подключитесь к сети для первой загрузки.</p>';
-showLoader(false);
-return;
-}
-}
-let html = '';
-for (let row of cachedData) {
-if (!row || row.length < 5) continue;
-let day = parseInt(row.at(0)), month = parseInt(row.at(1)), year = parseInt(row.at(2));
-if (isNaN(day) || isNaN(month) || isNaN(year)) continue;
-if (day !== targetDay || month !== targetMonth || year !== targetYear) continue;
-let pairNum = normalizeCell(row.at(3));
-let group = normalizeCell(row.at(4));
-let subject = normalizeCell(row.at(6));
-let room = normalizeCell(row.at(7));
-let teacher = normalizeCell((row.at(8) || '') + ' ' + (row.at(9) || '') + ' ' + (row.at(10) || ''));
-if (currentType === 'group' && group.toLowerCase() !== currentName.toLowerCase()) continue;
-if (currentType === 'teacher' && teacher.toLowerCase() !== currentName.toLowerCase()) continue;
-let numberStr = pairNum === '0' ? '' : pairNum + '.';
-let displayTeacher = currentType === 'teacher' ? group : teacher;
-let isDistance = subject.toLowerCase().includes('(до)') || subject.toLowerCase().includes('дистант');
-let timeStr = getTimeForPair(pairNum, ourDay, isDistance);
-html += '<div class="lesson-card">' +
-'<div class="lesson-top">' +
-'<span class="lesson-num">' + escapeHtml(numberStr) + '</span>' +
-'<span class="lesson-title">' + escapeHtml(subject) + '</span>' +
-'</div>' +
-'<div class="lesson-time">' + escapeHtml(timeStr) + '</div>' +
-'<div class="lesson-bottom">' +
-'<div class="lesson-teacher"><span style="color:#1A237E;margin-right:6px;">👤</span>' + escapeHtml(displayTeacher) + '</div>' +
-'<div class="lesson-room">' + escapeHtml(room) + '</div>' +
-'</div>' +
-'</div>';
-}
-if (html === '') html = '<p style="text-align:center; color:#888; margin-top:20px; font-size:14px;">На этот день пар нет</p>';
-document.getElementById('schedule-list').innerHTML = html;
-showLoader(false);
+    showLoader(true);
+    const targetDay = currentDate.getDate();
+    const targetMonth = currentDate.getMonth() + 1;
+    const targetYear = currentDate.getFullYear();
+    const jsDay = currentDate.getDay();
+    const ourDay = jsDay === 0 ? 7 : jsDay;
+
+    if (!cachedData) {
+        try {
+            cachedData = await fetchSheet(RANGE_SCHEDULE);
+        } catch (e) {
+            document.getElementById('schedule-list').innerHTML = '<p style="text-align:center; color:#888; margin-top:20px; font-size:14px;">Нет подключения к интернету.<br>Подключитесь к сети для первой загрузки.</p>';
+            showLoader(false);
+            return;
+        }
+    }
+
+    let html = '';
+    for (let row of cachedData) {
+        if (!row || row.length < 5) continue;
+        let day = parseInt(row.at(0)), month = parseInt(row.at(1)), year = parseInt(row.at(2));
+        if (isNaN(day) || isNaN(month) || isNaN(year)) continue;
+        if (day !== targetDay || month !== targetMonth || year !== targetYear) continue;
+
+        let pairNum = normalizeCell(row.at(3));
+        let group = normalizeCell(row.at(4));
+        let subject = normalizeCell(row.at(6));
+        let room = normalizeCell(row.at(7));
+        let teacher = normalizeCell((row.at(8) || '') + ' ' + (row.at(9) || '') + ' ' + (row.at(10) || ''));
+
+        if (currentType === 'group' && group.toLowerCase() !== currentName.toLowerCase()) continue;
+        if (currentType === 'teacher' && teacher.toLowerCase() !== currentName.toLowerCase()) continue;
+
+        let numberStr = pairNum === '0' ? '' : pairNum + '.';
+        let displayTeacher = currentType === 'teacher' ? group : teacher;
+        let isDistance = subject.toLowerCase().includes('(до)') || subject.toLowerCase().includes('дистант');
+        let timeStr = getTimeForPair(pairNum, ourDay, isDistance);
+
+        html += '<div class="lesson-card">' +
+            '<div class="lesson-top">' +
+            '<span class="lesson-num">' + escapeHtml(numberStr) + '</span>' +
+            '<span class="lesson-title">' + escapeHtml(subject) + '</span>' +
+            '</div>' +
+            '<div class="lesson-time">' + escapeHtml(timeStr) + '</div>' +
+            '<div class="lesson-bottom">' +
+            '<div class="lesson-teacher"><span style="color:#1A237E;margin-right:6px;">👤</span>' + escapeHtml(displayTeacher) + '</div>' +
+            '<div class="lesson-room">' + escapeHtml(room) + '</div>' +
+            '</div>' +
+            '</div>';
+    }
+
+    if (html === '') html = '<p style="text-align:center; color:#888; margin-top:20px; font-size:14px;">На этот день пар нет</p>';
+    document.getElementById('schedule-list').innerHTML = html;
+    showLoader(false);
 }
 function showLoader(show) {
-document.getElementById('loader').classList.toggle('active', show);
+const loader = document.getElementById('loader');
+if (loader) loader.classList.toggle('active', show);
 }
 // ==========================================
 // ОБНОВЛЕНИЕ ДАННЫХ (pull-to-refresh)
@@ -506,28 +528,43 @@ setTimeout(() => { isRefreshing = false; }, 400);
 document.addEventListener('touchend', () => { pulling = false; }, { passive: true });
 })();
 // ==========================================
-// WEB PUSH УВЕДОМЛЕНИЯ (ONESIGNAL)
+// WEB PUSH УВЕДОМЛЕНИЯ (ONESIGNAL v16)
 // ==========================================
+let oneSignalReady = false;
 window.OneSignalDeferred = window.OneSignalDeferred || [];
 OneSignalDeferred.push(async function(OneSignal) {
+try {
 await OneSignal.init({
 appId: ONESIGNAL_APP_ID,
 serviceWorkerParam: { scope: './' },
 serviceWorkerPath: 'sw.js',
 allowLocalhostAsSecureOrigin: true
 });
-const isSubscribed = OneSignal.User.PushSubscription.optedIn;
+oneSignalReady = true;
+const isSubscribed = Boolean(OneSignal.User.PushSubscription.optedIn);
 localStorage.setItem('btt_notifications', isSubscribed ? 'on' : 'off');
 updateSettingsUI();
-updatePushTags();
+await updatePushTags();
+// Отслеживаем изменение статуса подписки в реальном времени
+OneSignal.User.PushSubscription.addEventListener('change', async (event) => {
+const active = Boolean(event.current && event.current.optedIn);
+localStorage.setItem('btt_notifications', active ? 'on' : 'off');
+updateSettingsUI();
+if (active) {
+await updatePushTags();
+}
+});
+} catch (e) {
+console.error('Ошибка инициализации OneSignal:', e);
+}
 });
 function getNotificationsEnabled() {
 try { return localStorage.getItem('btt_notifications') === 'on'; }
 catch (e) { return false; }
 }
 async function setNotificationsEnabled(enabled) {
-if (!window.OneSignal) {
-alert('Сервис уведомлений ещё загружается, попробуйте через пару секунд.');
+if (!oneSignalReady || !window.OneSignal) {
+alert('Сервис уведомлений ещё загружается. Подождите пару секунд и попробуйте снова.');
 updateSettingsUI();
 return;
 }
@@ -539,57 +576,67 @@ localStorage.setItem('btt_notifications', 'off');
 updateSettingsUI();
 return;
 }
+// Проверка поддержки Web Push на iOS вне режима PWA
+const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+const isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+if (isIOSDevice && !isPWA) {
+alert('На iPhone уведомления работают только после установки приложения на экран «Домой» (кнопка «Поделиться» → «На экран „Домой“»).');
+localStorage.setItem('btt_notifications', 'off');
+updateSettingsUI();
+return;
+}
 try {
 await OneSignal.Notifications.requestPermission();
+if (OneSignal.Notifications.permission) {
 await OneSignal.User.PushSubscription.optIn();
-if (OneSignal.User.PushSubscription.optedIn) {
 localStorage.setItem('btt_notifications', 'on');
 await updatePushTags();
 } else {
 localStorage.setItem('btt_notifications', 'off');
-alert('Разрешение на уведомления не выдано в настройках браузера.');
+alert('Разрешение на уведомления заблокировано. Включите его в настройках браузера или устройства.');
 }
 } catch (e) {
-console.error(e);
+console.error('Ошибка подписки на уведомления:', e);
 localStorage.setItem('btt_notifications', 'off');
 }
 } else {
+try {
 await OneSignal.User.PushSubscription.optOut();
+} catch (e) {
+console.error('Ошибка отписки:', e);
+}
 localStorage.setItem('btt_notifications', 'off');
 }
 updateSettingsUI();
 }
 async function updatePushTags() {
-if (!window.OneSignal) return;
+if (!oneSignalReady || !window.OneSignal) return;
+try {
 const fav = getFavorite();
 const targetName = normalizeCell(fav ? fav.name : currentName).toLowerCase();
 if (targetName) {
-// Подписка получает push только по своему target (группа/преподаватель)
 await OneSignal.User.addTag('target', targetName);
 } else {
-// Нет выбранного расписания — снимаем тег, чтобы не получать чужие push
 await OneSignal.User.removeTag('target');
+}
+} catch (e) {
+console.error('Ошибка обновления тега OneSignal:', e);
 }
 }
 // ==========================================
 // ЛОГИКА PWA
 // ==========================================
-if ('serviceWorker' in navigator) {
-window.addEventListener('load', () => {
-navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
-reg.update();
-});
-});
-}
 let deferredPrompt;
 const installBtn = document.getElementById('install-btn');
 const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-if (isIOS && !isStandalone) installBtn.style.display = 'block';
+if (installBtn && isIOS && !isStandalone) {
+installBtn.style.display = 'block';
+}
 window.addEventListener('beforeinstallprompt', (e) => {
 e.preventDefault();
 deferredPrompt = e;
-if (!isStandalone) installBtn.style.display = 'block';
+if (installBtn && !isStandalone) installBtn.style.display = 'block';
 });
 if (installBtn) {
 installBtn.addEventListener('click', async () => {
@@ -606,5 +653,5 @@ installBtn.style.display = 'none';
 });
 }
 window.addEventListener('appinstalled', () => {
-installBtn.style.display = 'none';
+if (installBtn) installBtn.style.display = 'none';
 });

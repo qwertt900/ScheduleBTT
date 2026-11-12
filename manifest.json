@@ -1,7 +1,7 @@
 {
   "name": "Расписание БТТ",
   "short_name": "Расписание",
-  "start_url": "./index.html",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#2E7D32",
   "theme_color": "#2E7D32",
