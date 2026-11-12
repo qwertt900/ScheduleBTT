@@ -215,7 +215,7 @@ function showScreen(id) {
 async function fetchSheet(range) {
     const cacheKey = 'btt_cache_' + range;
     try {
-                        const url = [
+        const url = [
             'https://googleapis.com',
             'v4',
             'spreadsheets',
@@ -290,10 +290,9 @@ async function loadGroups() {
             let cleanCheck = g.replace(/[\s\-—_.,]+/g, '');
             if (cleanCheck !== '' && !g.includes('undefined')) uniqueGroups.add(g);
         });
-
-        allGroups = Array.from(uniqueGroups).sort();
-document.getElementById('group-list').innerHTML = allGroups.map(g => 
-    '<div class="grid-item" onclick="openSchedule(\'group\', this.textContent)">' + escapeHtml(g) + '</div>'
+allGroups = Array.from(uniqueGroups).sort();
+document.getElementById('group-list').innerHTML = allGroups.map(g =>
+'' + escapeHtml(g) + ''
 ).join('');
 } catch (e) {
 alert('Ошибка загрузки данных');
@@ -319,9 +318,8 @@ uniqueTeachers.add(full);
 }
 allTeachers = Array.from(uniqueTeachers).sort();
 document.getElementById('teacher-list').innerHTML = allTeachers.map(t =>
-    '<li onclick="openSchedule(\'teacher\', this.textContent)">' + escapeHtml(t) + '</li>'
+'' + escapeHtml(t) + ''
 ).join('');
-
 } catch (e) {
 alert('Ошибка загрузки данных');
 }
@@ -367,29 +365,27 @@ var day = d.getDay(), diff = d.getDate() - day + (day == 0 ? -6 : 1);
 return new Date(d.setDate(diff));
 }
 function updateWeekUI() {
-    const monday = getMonday(currentDate);
-    const daysContainer = document.getElementById('days-container');
-    if (!daysContainer) return;
-
-    let html = '';
-    const dayNames = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
-    for (let i = 0; i < 6; i++) {
-        let d = new Date(monday);
-        d.setDate(monday.getDate() + i);
-        let isActive = d.getDate() === currentDate.getDate() && d.getMonth() === currentDate.getMonth();
-        html += '<div class="day-item ' + (isActive ? 'active' : '') + '" onclick="selectDay(' + d.getTime() + ')">' +
-            '<div class="day-name">' + dayNames[i] + '</div>' +
-            '<div class="day-num">' + d.getDate() + '</div>' +
-            '</div>';
-    }
-    daysContainer.innerHTML = html;
-
-    let saturday = new Date(monday);
-    saturday.setDate(monday.getDate() + 5);
-    const opt = { day: 'numeric', month: 'short' };
-    let strMon = monday.toLocaleDateString('ru-RU', opt).replace('.', '');
-    let strSat = saturday.toLocaleDateString('ru-RU', opt).replace('.', '');
-    document.getElementById('week-range').innerText = strMon + ' – ' + strSat + '.';
+const monday = getMonday(currentDate);
+const daysContainer = document.getElementById('days-container');
+if (!daysContainer) return;
+let html = '';
+const dayNames = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+for (let i = 0; i < 6; i++) {
+let d = new Date(monday);
+d.setDate(monday.getDate() + i);
+let isActive = d.getDate() === currentDate.getDate() && d.getMonth() === currentDate.getMonth();
+html += '' +
+'' + dayNames[i] + '' +
+'' + d.getDate() + '' +
+'';
+}
+daysContainer.innerHTML = html;
+let saturday = new Date(monday);
+saturday.setDate(monday.getDate() + 5);
+const opt = { day: 'numeric', month: 'short' };
+let strMon = monday.toLocaleDateString('ru-RU', opt).replace('.', '');
+let strSat = saturday.toLocaleDateString('ru-RU', opt).replace('.', '');
+document.getElementById('week-range').innerText = strMon + ' – ' + strSat + '.';
 }
 function selectDay(timestamp) {
 currentDate = new Date(timestamp);
@@ -431,60 +427,53 @@ default: return "";
 }
 }
 async function loadSchedule() {
-    showLoader(true);
-    const targetDay = currentDate.getDate();
-    const targetMonth = currentDate.getMonth() + 1;
-    const targetYear = currentDate.getFullYear();
-    const jsDay = currentDate.getDay();
-    const ourDay = jsDay === 0 ? 7 : jsDay;
-
-    if (!cachedData) {
-        try {
-            cachedData = await fetchSheet(RANGE_SCHEDULE);
-        } catch (e) {
-            document.getElementById('schedule-list').innerHTML = '<p style="text-align:center; color:#888; margin-top:20px; font-size:14px;">Нет подключения к интернету.<br>Подключитесь к сети для первой загрузки.</p>';
-            showLoader(false);
-            return;
-        }
-    }
-
-    let html = '';
-    for (let row of cachedData) {
-        if (!row || row.length < 5) continue;
-        let day = parseInt(row.at(0)), month = parseInt(row.at(1)), year = parseInt(row.at(2));
-        if (isNaN(day) || isNaN(month) || isNaN(year)) continue;
-        if (day !== targetDay || month !== targetMonth || year !== targetYear) continue;
-
-        let pairNum = normalizeCell(row.at(3));
-        let group = normalizeCell(row.at(4));
-        let subject = normalizeCell(row.at(6));
-        let room = normalizeCell(row.at(7));
-        let teacher = normalizeCell((row.at(8) || '') + ' ' + (row.at(9) || '') + ' ' + (row.at(10) || ''));
-
-        if (currentType === 'group' && group.toLowerCase() !== currentName.toLowerCase()) continue;
-        if (currentType === 'teacher' && teacher.toLowerCase() !== currentName.toLowerCase()) continue;
-
-        let numberStr = pairNum === '0' ? '' : pairNum + '.';
-        let displayTeacher = currentType === 'teacher' ? group : teacher;
-        let isDistance = subject.toLowerCase().includes('(до)') || subject.toLowerCase().includes('дистант');
-        let timeStr = getTimeForPair(pairNum, ourDay, isDistance);
-
-        html += '<div class="lesson-card">' +
-            '<div class="lesson-top">' +
-            '<span class="lesson-num">' + escapeHtml(numberStr) + '</span>' +
-            '<span class="lesson-title">' + escapeHtml(subject) + '</span>' +
-            '</div>' +
-            '<div class="lesson-time">' + escapeHtml(timeStr) + '</div>' +
-            '<div class="lesson-bottom">' +
-            '<div class="lesson-teacher"><span style="color:#1A237E;margin-right:6px;">👤</span>' + escapeHtml(displayTeacher) + '</div>' +
-            '<div class="lesson-room">' + escapeHtml(room) + '</div>' +
-            '</div>' +
-            '</div>';
-    }
-
-    if (html === '') html = '<p style="text-align:center; color:#888; margin-top:20px; font-size:14px;">На этот день пар нет</p>';
-    document.getElementById('schedule-list').innerHTML = html;
-    showLoader(false);
+showLoader(true);
+const targetDay = currentDate.getDate();
+const targetMonth = currentDate.getMonth() + 1;
+const targetYear = currentDate.getFullYear();
+const jsDay = currentDate.getDay();
+const ourDay = jsDay === 0 ? 7 : jsDay;
+if (!cachedData) {
+try {
+cachedData = await fetchSheet(RANGE_SCHEDULE);
+} catch (e) {
+document.getElementById('schedule-list').innerHTML = 'Нет подключения к интернету.Подключитесь к сети для первой загрузки.';
+showLoader(false);
+return;
+}
+}
+let html = '';
+for (let row of cachedData) {
+if (!row || row.length < 5) continue;
+let day = parseInt(row.at(0)), month = parseInt(row.at(1)), year = parseInt(row.at(2));
+if (isNaN(day) || isNaN(month) || isNaN(year)) continue;
+if (day !== targetDay || month !== targetMonth || year !== targetYear) continue;
+let pairNum = normalizeCell(row.at(3));
+let group = normalizeCell(row.at(4));
+let subject = normalizeCell(row.at(6));
+let room = normalizeCell(row.at(7));
+let teacher = normalizeCell((row.at(8) || '') + ' ' + (row.at(9) || '') + ' ' + (row.at(10) || ''));
+if (currentType === 'group' && group.toLowerCase() !== currentName.toLowerCase()) continue;
+if (currentType === 'teacher' && teacher.toLowerCase() !== currentName.toLowerCase()) continue;
+let numberStr = pairNum === '0' ? '' : pairNum + '.';
+let displayTeacher = currentType === 'teacher' ? group : teacher;
+let isDistance = subject.toLowerCase().includes('(до)') || subject.toLowerCase().includes('дистант');
+let timeStr = getTimeForPair(pairNum, ourDay, isDistance);
+html += '' +
+'' +
+'' + escapeHtml(numberStr) + '' +
+'' + escapeHtml(subject) + '' +
+'' +
+'' + escapeHtml(timeStr) + '' +
+'' +
+'👤' + escapeHtml(displayTeacher) + '' +
+'' + escapeHtml(room) + '' +
+'' +
+'';
+}
+if (html === '') html = 'На этот день пар нет';
+document.getElementById('schedule-list').innerHTML = html;
+showLoader(false);
 }
 function showLoader(show) {
 const loader = document.getElementById('loader');
@@ -542,19 +531,17 @@ let oneSignalReady = false;
 window.OneSignalDeferred = window.OneSignalDeferred || [];
 OneSignalDeferred.push(async function(OneSignal) {
 try {
-                await OneSignal.init({
-            appId: ONESIGNAL_APP_ID,
-            serviceWorkerParam: { scope: '/ScheduleBTT/' },
-            serviceWorkerPath: '/ScheduleBTT/sw.js',
-            allowLocalhostAsSecureOrigin: true
-        });
-
+await OneSignal.init({
+appId: ONESIGNAL_APP_ID,
+serviceWorkerParam: { scope: '/ScheduleBTT/' },
+serviceWorkerPath: '/ScheduleBTT/sw.js',
+allowLocalhostAsSecureOrigin: true
+});
 oneSignalReady = true;
 const isSubscribed = Boolean(OneSignal.User.PushSubscription.optedIn);
 localStorage.setItem('btt_notifications', isSubscribed ? 'on' : 'off');
 updateSettingsUI();
 await updatePushTags();
-// Отслеживаем изменение статуса подписки в реальном времени
 OneSignal.User.PushSubscription.addEventListener('change', async (event) => {
 const active = Boolean(event.current && event.current.optedIn);
 localStorage.setItem('btt_notifications', active ? 'on' : 'off');
@@ -585,7 +572,6 @@ localStorage.setItem('btt_notifications', 'off');
 updateSettingsUI();
 return;
 }
-// Проверка поддержки Web Push на iOS вне режима PWA
 const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 const isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
 if (isIOSDevice && !isPWA) {
