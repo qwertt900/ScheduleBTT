@@ -253,17 +253,18 @@ function updateSettingsUI() {
 
     const list = document.getElementById('favorites-list');
     if (list) {
-        const favs = getFavorites(); // Убедись, что вызывается getFavorites (с "s" на конце)
+        const favs = getFavorites();
         if (favs.length > 0) {
             list.innerHTML = favs.map((fav, i) => `
-    <           li onclick="openSchedule('${fav.type}', '${escapeHtml(fav.name)}')">
-                    <!-- Обернули текст в span с flex: 1 -->
-                    <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                    ⭐ ${escapeHtml(fav.name)}
+                <li style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px;">
+                    <!-- Клик по тексту открывает расписание -->
+                    <span onclick="openSchedule('${fav.type}', '${escapeHtml(fav.name)}')" style="flex: 1; cursor: pointer; display: flex; align-items: center;">
+                        ⭐ ${escapeHtml(fav.name)}
                     </span>
-                    <button class="btn-remove" onclick="event.stopPropagation(); removeFavorite(${i})">✕</button>
-                    </li>
-                `).join('');
+                    <!-- Клик по крестику только удаляет -->
+                    <button class="btn-remove" onclick="event.preventDefault(); event.stopPropagation(); removeFavorite(${i});">✕</button>
+                </li>
+            `).join('');
         } else {
             list.innerHTML = '<li class="empty">Нет избранного. Откройте расписание и нажмите ☆</li>';
         }
@@ -272,10 +273,12 @@ function updateSettingsUI() {
 
 function removeFavorite(index) {
     let favs = getFavorites();
-    favs.splice(index, 1); // Удаляем элемент по индексу
-    saveFavorites(favs);
-    updateSettingsUI(); // Перерисовываем список
-    updateFavoriteUI(); // Обновляем звездочку в шапке
+    if (index >= 0 && index < favs.length) {
+        favs.splice(index, 1); 
+        saveFavorites(favs);
+        updateSettingsUI(); 
+        updateFavoriteUI(); 
+    }
 }
 
 function showScreen(id) {

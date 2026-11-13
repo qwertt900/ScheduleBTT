@@ -3,7 +3,7 @@ importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
 // 2. Логика кэширования для офлайн-режима
 // Важно: если будешь обновлять style.css или app.js, меняй версию (например, на v28), 
 // чтобы браузер пользователей скачал новые файлы
-const CACHE_NAME = 'btt-schedule-v31'; 
+const CACHE_NAME = 'btt-schedule-v32'; 
 
 const ASSETS = [
   './',
