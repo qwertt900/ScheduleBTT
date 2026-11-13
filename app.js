@@ -253,26 +253,29 @@ function updateSettingsUI() {
 
     const list = document.getElementById('favorites-list');
     if (list) {
-        const favs = getFavorites();
+        const favs = getFavorites(); // Убедись, что вызывается getFavorites (с "s" на конце)
         if (favs.length > 0) {
             list.innerHTML = favs.map((fav, i) => `
-                <li onclick="openSchedule('${fav.type}', '${escapeHtml(fav.name)}')">
-                    <span>⭐ ${escapeHtml(fav.name)}</span>
+    <           li onclick="openSchedule('${fav.type}', '${escapeHtml(fav.name)}')">
+                    <!-- Обернули текст в span с flex: 1 -->
+                    <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    ⭐ ${escapeHtml(fav.name)}
+                    </span>
                     <button class="btn-remove" onclick="event.stopPropagation(); removeFavorite(${i})">✕</button>
-                </li>
-            `).join('');
+                    </li>
+                `).join('');
         } else {
             list.innerHTML = '<li class="empty">Нет избранного. Откройте расписание и нажмите ☆</li>';
         }
     }
 }
 
-function removeFavorite() {
+function removeFavorite(index) {
     let favs = getFavorites();
-    favs.splice(index, 1);
+    favs.splice(index, 1); // Удаляем элемент по индексу
     saveFavorites(favs);
-    updateSettingsUI();
-    updateFavoriteUI();
+    updateSettingsUI(); // Перерисовываем список
+    updateFavoriteUI(); // Обновляем звездочку в шапке
 }
 
 function showScreen(id) {
