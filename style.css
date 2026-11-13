@@ -269,3 +269,56 @@ h3 { font-size: 12px; color: var(--text-muted); letter-spacing: 1px; margin-bott
     opacity: 1;
     pointer-events: auto;
 }
+
+/* Бейджик подгруппы (стиль "контур") */
+.subgroup-badge {
+    display: inline-block;
+    background-color: transparent;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-left: 8px;
+    vertical-align: middle;
+    white-space: nowrap;
+    line-height: 1.2;
+}
+
+/* Для темной темы */
+[data-theme="dark"] .subgroup-badge {
+    color: var(--accent-light);
+    border-color: var(--accent-light);
+}
+/* Виджет ближайшей пары */
+.next-lesson-widget {
+    background: var(--card-bg);
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px var(--shadow);
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+.next-lesson-widget:active { transform: scale(0.98); }
+.next-lesson-widget .widget-time {
+    font-size: 12px;
+    color: var(--accent);
+    font-weight: bold;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+}
+.next-lesson-widget .widget-subject {
+    font-size: 15px;
+    font-weight: bold;
+    color: var(--text);
+    margin-bottom: 4px;
+}
+.next-lesson-widget .widget-info {
+    font-size: 13px;
+    color: var(--text-muted);
+    display: flex;
+    justify-content: space-between;
+}

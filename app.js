@@ -7,6 +7,7 @@ const RANGE_TEACHER_LAST = "'Расписание'!I7:I";
 const RANGE_TEACHER_FIRST = "'Расписание'!J7:J";
 const RANGE_TEACHER_MIDDLE = "'Расписание'!K7:K";
 const RANGE_SCHEDULE = "'Расписание'!A8:K"; 
+const RANGE_SUBGROUP = "'Расписание'!F7:F";
 
 function normalizeCell(str) {
     return String(str === undefined || str === null ? '' : str)
@@ -32,33 +33,37 @@ let currentScreenId = 'screen-main';
 let lastScreen = 'screen-main';
 
 // ---- ИЗБРАННОЕ ----
-function getFavorite() {
+function getFavorites() {
     try {
-        const raw = localStorage.getItem('btt_favorite');
-        return raw ? JSON.parse(raw) : null;
-    } catch (e) { return null; }
+        const raw = localStorage.getItem('btt_favorites');
+        return raw ? JSON.parse(raw) : [];
+    } catch (e) { return []; }
 }
 
-function setFavorite(type, name) {
+function saveFavorites(favs) {
     try {
-        if (type && name) localStorage.setItem('btt_favorite', JSON.stringify({ type, name }));
-        else localStorage.removeItem('btt_favorite');
+        localStorage.setItem('btt_favorites', JSON.stringify(favs));
     } catch (e) {}
     updatePushTags();
 }
 
 function isFavorite(type, name) {
-    const fav = getFavorite();
-    return !!(fav && fav.type === type && fav.name === name);
+    return getFavorites().some(f => f.type === type && f.name === name);
 }
 
 function toggleFavoriteForCurrent() {
     if (!currentType || !currentName) return;
-    if (isFavorite(currentType, currentName)) {
-        setFavorite(null, null);
+    
+    let favs = getFavorites();
+    const index = favs.findIndex(f => f.type === currentType && f.name === currentName);
+    
+    if (index > -1) {
+        favs.splice(index, 1); // Удаляем
     } else {
-        setFavorite(currentType, currentName);
+        favs.push({ type: currentType, name: currentName }); // Добавляем
     }
+    
+    saveFavorites(favs);
     updateFavoriteUI();
     updateSettingsUI();
 }
@@ -118,7 +123,84 @@ function restoreState() {
         }
     } catch (e) {}
 }
+async function updateNextLessonWidget() {
+    const widget = document.getElementById('next-lesson-widget');
+    if (!widget) return;
+    
+    // Если группа не выбрана, скрываем виджет
+    if (!currentType || !currentName) {
+        widget.style.display = 'none';
+        return;
+    }
 
+    if (!cachedData) return; // Ждем загрузки данных
+
+    const now = new Date();
+    const currentDay = now.getDate();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const currentTime = currentHour * 60 + currentMinute;
+
+    const jsDay = now.getDay();
+    const ourDay = jsDay === 0 ? 7 : jsDay;
+
+    let nextLesson = null;
+
+    for (let row of cachedData) {
+        if (!row || row.length < 5) continue;
+        let day = parseInt(row[0]), month = parseInt(row[1]), year = parseInt(row[2]);
+        if (day !== currentDay || month !== currentMonth || year !== currentYear) continue;
+
+        let pairNum = normalizeCell(row[3]);
+        let group = normalizeCell(row[4]);
+        let subject = normalizeCell(row[6]);
+        let room = normalizeCell(row[7]);
+        let teacher = normalizeCell((row[8] || '') + ' ' + (row[9] || '') + ' ' + (row[10] || ''));
+
+        if (currentType === 'group' && group.toLowerCase() !== currentName.toLowerCase()) continue;
+        if (currentType === 'teacher' && teacher.toLowerCase() !== currentName.toLowerCase()) continue;
+
+        // Получаем время пары
+        let isDistance = subject.toLowerCase().includes('(до)') || subject.toLowerCase().includes('дистант');
+        let timeStr = getTimeForPair(pairNum, ourDay, isDistance);
+        if (!timeStr) continue;
+
+        // Парсим время начала пары
+        const [startHour, startMinute] = timeStr.split('–')[0].split(':').map(Number);
+        const startTime = startHour * 60 + startMinute;
+
+        // Если пара еще не началась (или идет прямо сейчас с запасом в 10 минут после начала)
+        if (startTime > currentTime - 10) {
+            if (!nextLesson || startTime < nextLesson.startTime) {
+                nextLesson = {
+                    startTime,
+                    timeStr,
+                    subject,
+                    teacher,
+                    room,
+                    pairNum
+                };
+            }
+        }
+    }
+
+    if (nextLesson) {
+        widget.style.display = 'block';
+        widget.innerHTML = `
+            <div class="widget-time">⏰ Ближайшая пара: ${nextLesson.timeStr}</div>
+            <div class="widget-subject">${nextLesson.pairNum}. ${escapeHtml(nextLesson.subject)}</div>
+            <div class="widget-info">
+                <span>👤 ${escapeHtml(currentType === 'teacher' ? 'Ваша пара' : nextLesson.teacher)}</span>
+                <span>🚪 ${escapeHtml(nextLesson.room)}</span>
+            </div>
+        `;
+        widget.onclick = () => openSchedule(currentType, currentName, true);
+    } else {
+        widget.style.display = 'none'; // На сегодня пар больше нет
+    }
+}
 window.onload = () => {
     const options = { weekday: 'long', day: 'numeric', month: 'long' };
     const mainDateEl = document.getElementById('current-date-main');
@@ -153,6 +235,7 @@ window.onload = () => {
     } else {
         showScreen('screen-main');
     }
+    setTimeout(updateNextLessonWidget, 500); // Небольшая задержка, чтобы данные успели загрузиться
 };
 
 // ---- ЭКРАН НАСТРОЕК ----
@@ -170,13 +253,14 @@ function updateSettingsUI() {
 
     const list = document.getElementById('favorites-list');
     if (list) {
-        const fav = getFavorite();
-        if (fav && fav.type && fav.name) {
-            list.innerHTML = '<li onclick="openSchedule(\'' + fav.type + '\', document.getElementById(\'fav-name\').value)">' +
-                '<span>⭐ ' + escapeHtml(fav.name) + '</span>' +
-                '<input type="hidden" id="fav-name" value="' + escapeHtml(fav.name) + '">' +
-                '<button class="btn-remove" onclick="event.stopPropagation(); removeFavorite()">✕</button>' +
-                '</li>';
+        const favs = getFavorites();
+        if (favs.length > 0) {
+            list.innerHTML = favs.map((fav, i) => `
+                <li onclick="openSchedule('${fav.type}', '${escapeHtml(fav.name)}')">
+                    <span>⭐ ${escapeHtml(fav.name)}</span>
+                    <button class="btn-remove" onclick="event.stopPropagation(); removeFavorite(${i})">✕</button>
+                </li>
+            `).join('');
         } else {
             list.innerHTML = '<li class="empty">Нет избранного. Откройте расписание и нажмите ☆</li>';
         }
@@ -184,7 +268,9 @@ function updateSettingsUI() {
 }
 
 function removeFavorite() {
-    setFavorite(null, null);
+    let favs = getFavorites();
+    favs.splice(index, 1);
+    saveFavorites(favs);
     updateSettingsUI();
     updateFavoriteUI();
 }
@@ -445,6 +531,11 @@ let pairNum = normalizeCell(row.at(3));
 let group = normalizeCell(row.at(4));
 let subject = normalizeCell(row.at(6));
 let room = normalizeCell(row.at(7));
+let subgroup = normalizeCell(row.at(5)); // Колонка F
+// Если в ячейке только дефисы или пусто, не выводим бейджик
+if (subgroup === '-' || subgroup === '—' || subgroup === '–' || subgroup === '') {
+    subgroup = '';
+}
 let teacher = normalizeCell((row.at(8) || '') + ' ' + (row.at(9) || '') + ' ' + (row.at(10) || ''));
 if (currentType === 'group' && group.toLowerCase() !== currentName.toLowerCase()) continue;
 if (currentType === 'teacher' && teacher.toLowerCase() !== currentName.toLowerCase()) continue;
@@ -459,7 +550,10 @@ html += `<div class="lesson-card">
     </div>
     <div class="lesson-time">${escapeHtml(timeStr)}</div>
     <div class="lesson-bottom">
-        <div class="lesson-teacher">👤 ${escapeHtml(displayTeacher)}</div>
+        <div class="lesson-teacher">
+    👤 ${escapeHtml(displayTeacher)} 
+    ${subgroup ? `<span class="subgroup-badge">${escapeHtml(subgroup)} подгр.</span>` : ''}
+</div>
         <div class="lesson-room">${escapeHtml(room)}</div>
     </div>
 </div>`;
@@ -597,18 +691,30 @@ localStorage.setItem('btt_notifications', 'off');
 updateSettingsUI();
 }
 async function updatePushTags() {
-if (!oneSignalReady || !window.OneSignal) return;
-try {
-const fav = getFavorite();
-const targetName = normalizeCell(fav ? fav.name : currentName).toLowerCase();
-if (targetName) {
-await OneSignal.User.addTag('target', targetName);
-} else {
-await OneSignal.User.removeTag('target');
-}
-} catch (e) {
-console.error('Ошибка обновления тега OneSignal:', e);
-}
+    if (!oneSignalReady || !window.OneSignal) return;
+    try {
+        const favs = getFavorites();
+        // Если избранного нет, но есть открытая группа, добавляем её
+        const targets = favs.length > 0 ? favs.map(f => f.name) : (currentName ? [currentName] : []);
+        
+        // Приводим к нижнему регистру (как в Apps Script)
+        const uniqueTargets = [...new Set(targets.map(t => normalizeCell(t).toLowerCase()))];
+
+        // Очищаем старые теги (OneSignal не поддерживает удаление всех тегов сразу одной командой, 
+        // поэтому просто перезаписываем или удаляем)
+        await OneSignal.User.removeTag('target');
+        
+        // Добавляем теги для каждой группы/преподавателя
+        for (const target of uniqueTargets) {
+            // Используем \p{L} для поддержки любых букв (включая кириллицу)
+const safeKey = `target_${target.replace(/[^\p{L}\p{N}]/gu, '_')}`;
+await OneSignal.User.addTag(safeKey, target);
+        }
+        
+        // ВАЖНО: В Apps Script теперь нужно будет отправлять пуш на тег `target_имя_группы`
+    } catch (e) {
+        console.error('Ошибка обновления тега OneSignal:', e);
+    }
 }
 // ==========================================
 // ЛОГИКА PWA
