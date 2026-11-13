@@ -67,7 +67,7 @@ body { background-color: var(--bg); color: var(--text); transition: background-c
 }
 [data-theme="dark"] .header { background-color: #1B5E20; }
 .header-top { display: flex; align-items: center; margin-bottom: 16px; }
-.logo-img { width: 52px; height: 52px; margin-right: 12px; object-fit: contain; border-radius: 8px; background-color: #2E7D32; padding: 2px; }
+.logo-img { width: 52px; height: 52px; margin-right: 12px; object-fit: contain; border-radius: 8px; padding: 2px; }
 .subtitle { font-size: 13px; color: var(--accent-light); }
 .title { font-size: 16px; font-weight: bold; }
 .header h2 { font-size: 20px; font-weight: bold; margin-top: 8px; }
@@ -129,6 +129,13 @@ h3 { font-size: 12px; color: var(--text-muted); letter-spacing: 1px; margin-bott
 .day-item.active .day-name { color: var(--day-active-text); }
 .day-item .day-num { font-size: 18px; font-weight: bold; color: var(--day-num); }
 .day-item.active .day-num { color: var(--day-active-text); }
+.empty-day {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 40px 20px;
+    font-size: 15px;
+    font-weight: 500;
+}
 
 /* Карточка пары */
 .lesson-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 6px var(--shadow); }
@@ -176,3 +183,89 @@ h3 { font-size: 12px; color: var(--text-muted); letter-spacing: 1px; margin-bott
 
 /* Кнопка-звезда в шапке расписания */
 .favorite-btn { width: 40px; height: 40px; border-radius: 70%; border: 2px solid transparent; background: transparent; color: white; font-size: 50px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+/* =========================================
+   АНИМАЦИИ ПЕРЕХОДОВ МЕЖДУ ЭКРАНАМИ
+   ========================================= */
+
+/* Плавное появление экрана снизу вверх */
+@keyframes screenFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(15px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Появление карточек (групп, преподавателей, пар) с задержкой */
+@keyframes cardFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Эффект нажатия на карточки */
+.card:active, 
+.grid-item:active, 
+.list li:active, 
+.lesson-card:active {
+    transform: scale(0.96) !important;
+    transition: transform 0.1s ease;
+}
+
+/* Применяем анимацию к контенту активного экрана */
+.screen.active .content {
+    animation: screenFadeIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+/* Плавное появление шапки */
+.screen.active .header {
+    animation: screenFadeIn 0.4s ease-out forwards;
+}
+
+/* Каскадное появление карточек в списках */
+.grid-item, 
+.list li, 
+.lesson-card {
+    animation: cardFadeIn 0.3s ease-out backwards;
+}
+
+/* Задержки для создания эффекта "волны" (каскада) */
+.grid-item:nth-child(1), .list li:nth-child(1), .lesson-card:nth-child(1) { animation-delay: 0.05s; }
+.grid-item:nth-child(2), .list li:nth-child(2), .lesson-card:nth-child(2) { animation-delay: 0.10s; }
+.grid-item:nth-child(3), .list li:nth-child(3), .lesson-card:nth-child(3) { animation-delay: 0.15s; }
+.grid-item:nth-child(4), .list li:nth-child(4), .lesson-card:nth-child(4) { animation-delay: 0.20s; }
+.grid-item:nth-child(5), .list li:nth-child(5), .lesson-card:nth-child(5) { animation-delay: 0.25s; }
+.grid-item:nth-child(6), .list li:nth-child(6), .lesson-card:nth-child(6) { animation-delay: 0.30s; }
+.grid-item:nth-child(7), .list li:nth-child(7), .lesson-card:nth-child(7) { animation-delay: 0.35s; }
+.grid-item:nth-child(8), .list li:nth-child(8), .lesson-card:nth-child(8) { animation-delay: 0.40s; }
+
+/* Плавное изменение цвета при переключении дней недели */
+.day-item {
+    transition: background-color 0.2s ease, transform 0.2s ease, color 0.2s ease;
+}
+
+/* Легкий эффект нажатия на дни недели */
+.day-item:active {
+    transform: scale(0.92);
+}
+
+/* Плавное появление и исчезновение загрузчика */
+.loader-overlay {
+    transition: opacity 0.3s ease;
+    opacity: 0;
+    pointer-events: none;
+    display: flex !important; /* Держим flex, но управляем прозрачностью */
+}
+
+.loader-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+}

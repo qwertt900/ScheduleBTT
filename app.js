@@ -464,7 +464,7 @@ html += `<div class="lesson-card">
     </div>
 </div>`;
 }
-if (html === '') html = 'На этот день пар нет';
+if (html === '') html = '<div class="empty-day">На этот день пар нет 🎉</div>';
 document.getElementById('schedule-list').innerHTML = html;
 showLoader(false);
 }
