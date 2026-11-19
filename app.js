@@ -512,61 +512,82 @@ default: return "";
 }
 }
 async function loadSchedule() {
-showLoader(true);
-const targetDay = currentDate.getDate();
-const targetMonth = currentDate.getMonth() + 1;
-const targetYear = currentDate.getFullYear();
-const jsDay = currentDate.getDay();
-const ourDay = jsDay === 0 ? 7 : jsDay;
-if (!cachedData) {
-try {
-cachedData = await fetchSheet(RANGE_SCHEDULE);
-} catch (e) {
-document.getElementById('schedule-list').innerHTML = 'Нет подключения к интернету.Подключитесь к сети для первой загрузки.';
-showLoader(false);
-return;
-}
-}
-let html = '';
-for (let row of cachedData) {
-if (!row || row.length < 5) continue;
-let day = parseInt(row.at(0)), month = parseInt(row.at(1)), year = parseInt(row.at(2));
-if (isNaN(day) || isNaN(month) || isNaN(year)) continue;
-if (day !== targetDay || month !== targetMonth || year !== targetYear) continue;
-let pairNum = normalizeCell(row.at(3));
-let group = normalizeCell(row.at(4));
-let subject = normalizeCell(row.at(6));
-let room = normalizeCell(row.at(7));
-let subgroup = normalizeCell(row.at(5)); // Колонка F
-// Если в ячейке только дефисы или пусто, не выводим бейджик
-if (subgroup === '-' || subgroup === '—' || subgroup === '–' || subgroup === '') {
-    subgroup = '';
-}
-let teacher = normalizeCell((row.at(8) || '') + ' ' + (row.at(9) || '') + ' ' + (row.at(10) || ''));
-if (currentType === 'group' && group.toLowerCase() !== currentName.toLowerCase()) continue;
-if (currentType === 'teacher' && teacher.toLowerCase() !== currentName.toLowerCase()) continue;
-let numberStr = pairNum === '0' ? '' : pairNum + '.';
-let displayTeacher = currentType === 'teacher' ? group : teacher;
-let isDistance = subject.toLowerCase().includes('(до)') || subject.toLowerCase().includes('дистант');
-let timeStr = getTimeForPair(pairNum, ourDay, isDistance);
-html += `<div class="lesson-card">
-    <div class="lesson-top">
-        <div class="lesson-num">${escapeHtml(numberStr)}</div>
-        <div class="lesson-title">${escapeHtml(subject)}</div>
-    </div>
-    <div class="lesson-time">${escapeHtml(timeStr)}</div>
-    <div class="lesson-bottom">
-        <div class="lesson-teacher">
-    👤 ${escapeHtml(displayTeacher)} 
-    ${subgroup ? `<span class="subgroup-badge">${escapeHtml(subgroup)} подгр.</span>` : ''}
-</div>
-        <div class="lesson-room">${escapeHtml(room)}</div>
-    </div>
-</div>`;
-}
-if (html === '') html = '<div class="empty-day">На этот день пар нет 🎉</div>';
-document.getElementById('schedule-list').innerHTML = html;
-showLoader(false);
+    showLoader(true);
+    const targetDay = currentDate.getDate();
+    const targetMonth = currentDate.getMonth() + 1;
+    const targetYear = currentDate.getFullYear();
+    const jsDay = currentDate.getDay(); 
+    const ourDay = jsDay === 0 ? 7 : jsDay; 
+    
+    if (!cachedData) {
+        try { 
+            cachedData = await fetchSheet(RANGE_SCHEDULE); 
+        } catch (e) { 
+            document.getElementById('schedule-list').innerHTML = '<p style="text-align:center; color:#888; margin-top:20px; font-size:14px;">Нет подключения к интернету.</p>';
+            showLoader(false); 
+            return; 
+        }
+    }
+
+    // 1. Собираем пары в массив
+    let lessonsArray = [];
+    for (let row of cachedData) {
+        if (row.length < 11) continue;
+        
+        let day = parseInt(row[0]), month = parseInt(row[1]), year = parseInt(row[2]);
+        if (day !== targetDay || month !== targetMonth || year !== targetYear) continue;
+
+        let pairNum = row[3] || '';
+        let group = row[4] || '';
+        let subject = row[6] || '';
+        let room = row[7] || '';
+        let teacher = `${row[8] || ''} ${row[9] || ''} ${row[10] || ''}`.replace(/\s+/g, ' ').trim();
+
+        if (currentType === 'group' && group.toLowerCase() !== currentName.toLowerCase()) continue;
+        if (currentType === 'teacher' && teacher.toLowerCase() !== currentName.toLowerCase()) continue;
+
+        let isDistance = subject.toLowerCase().includes('(до)') || subject.toLowerCase().includes('дистант');
+        let timeStr = getTimeForPair(pairNum, ourDay, isDistance);
+
+        lessonsArray.push({
+            pairNum: pairNum,
+            subject: subject,
+            room: room,
+            displayTeacher: currentType === 'teacher' ? group : teacher,
+            timeStr: timeStr
+        });
+    }
+
+    // 2. СОРТИРУЕМ МАССИВ
+    // Сначала пары без номера (0 или пусто), потом по возрастанию номера
+    lessonsArray.sort((a, b) => {
+        let numA = parseInt(a.pairNum) || 0;
+        let numB = parseInt(b.pairNum) || 0;
+        return numA - numB;
+    });
+
+    // 3. Формируем HTML
+    let html = '';
+    for (let lesson of lessonsArray) {
+        let numberStr = lesson.pairNum === '0' ? '' : lesson.pairNum + '.';
+        html += `
+            <div class="lesson-card">
+                <div class="lesson-top">
+                    <span class="lesson-num">${numberStr}</span>
+                    <span class="lesson-title">${escapeHtml(lesson.subject)}</span>
+                </div>
+                <div class="lesson-time">${escapeHtml(lesson.timeStr)}</div>
+                <div class="lesson-bottom">
+                    <div class="lesson-teacher"><span style="color:#1A237E;margin-right:6px;">👤</span>${escapeHtml(lesson.displayTeacher)}</div>
+                    <div class="lesson-room">${escapeHtml(lesson.room)}</div>
+                </div>
+            </div>
+        `;
+    }
+
+    if (html === '') html = '<p style="text-align:center; color:#888; margin-top:20px; font-size:14px;">На этот день пар нет</p>';
+    document.getElementById('schedule-list').innerHTML = html;
+    showLoader(false);
 }
 function showLoader(show) {
 const loader = document.getElementById('loader');
@@ -698,28 +719,41 @@ updateSettingsUI();
 }
 async function updatePushTags() {
     if (!oneSignalReady || !window.OneSignal) return;
+    
     try {
-        const favs = getFavorites();
-        // Если избранного нет, но есть открытая группа, добавляем её
-        const targets = favs.length > 0 ? favs.map(f => f.name) : (currentName ? [currentName] : []);
-        
-        // Приводим к нижнему регистру (как в Apps Script)
-        const uniqueTargets = [...new Set(targets.map(t => normalizeCell(t).toLowerCase()))];
+        // 1. Получаем список тегов, которые мы устанавливали в прошлый раз
+        let oldTagsRaw = localStorage.getItem('btt_active_push_tags');
+        let oldTags = oldTagsRaw ? JSON.parse(oldTagsRaw) : [];
 
-        // Очищаем старые теги (OneSignal не поддерживает удаление всех тегов сразу одной командой, 
-        // поэтому просто перезаписываем или удаляем)
-        await OneSignal.User.removeTag('target');
+        // 2. Формируем список новых тегов на основе актуального избранного
+        const favs = getFavorites();
+        const targets = favs.length > 0 ? favs.map(f => f.name) : (currentName ? [currentName] : []);
+        const uniqueTargets = [...new Set(targets.map(t => normalizeCell(t).toLowerCase()))];
         
-        // Добавляем теги для каждой группы/преподавателя
+        let newTags = [];
         for (const target of uniqueTargets) {
-            // Используем \p{L} для поддержки любых букв (включая кириллицу)
-const safeKey = `target_${target.replace(/[^\p{L}\p{N}]/gu, '_')}`;
-await OneSignal.User.addTag(safeKey, target);
+            // Создаем безопасный ключ (заменяем пробелы и спецсимволы)
+            const safeKey = `target_${target.replace(/[^\p{L}\p{N}]/gu, '_')}`;
+            newTags.push(safeKey);
         }
-        
-        // ВАЖНО: В Apps Script теперь нужно будет отправлять пуш на тег `target_имя_группы`
+
+        // 3. Удаляем старые теги, которых больше нет в новом списке
+        for (const oldTag of oldTags) {
+            if (!newTags.includes(oldTag)) {
+                await OneSignal.User.removeTag(oldTag);
+            }
+        }
+
+        // 4. Добавляем новые теги
+        for (const newTag of newTags) {
+            await OneSignal.User.addTag(newTag, "active");
+        }
+
+        // 5. Сохраняем актуальный список тегов в память
+        localStorage.setItem('btt_active_push_tags', JSON.stringify(newTags));
+
     } catch (e) {
-        console.error('Ошибка обновления тега OneSignal:', e);
+        console.error('Ошибка обновления тегов OneSignal:', e);
     }
 }
 // ==========================================
