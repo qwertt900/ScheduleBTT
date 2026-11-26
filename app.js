@@ -673,18 +673,18 @@ catch (e) { return false; }
 }
 async function setNotificationsEnabled(enabled) {
 if (!oneSignalReady || !window.OneSignal) {
-alert('Сервис уведомлений ещё загружается. Подождите пару секунд и попробуйте снова.');
-updateSettingsUI();
-return;
-}
-if (enabled) {
-const fav = getFavorite();
-if (!fav && !currentName) {
-alert('Сначала откройте расписание нужной группы или преподавателя (или добавьте его в избранное ⭐).');
-localStorage.setItem('btt_notifications', 'off');
-updateSettingsUI();
-return;
-}
+        alert('Сервис уведомлений ещё загружается. Подождите пару секунд и попробуйте снова.');
+        updateSettingsUI();
+        return;
+    }
+    if (enabled) {
+        const favs = getFavorites(); // Исправлено: было getFavorite()
+        if (favs.length === 0 && !currentName) { // Исправлено: проверяем длину массива
+            alert('Сначала откройте расписание нужной группы или преподавателя (или добавьте его в избранное ⭐).');
+            localStorage.setItem('btt_notifications', 'off');
+            updateSettingsUI();
+            return;
+        }
 const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 const isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
 if (isIOSDevice && !isPWA) {
